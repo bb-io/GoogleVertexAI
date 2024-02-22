@@ -1,11 +1,11 @@
-using Apps.App.Invocables;
+using Apps.GoogleVertexAI.Invocables;
 using Blackbird.Applications.Sdk.Common.Actions;
 using Blackbird.Applications.Sdk.Common.Invocation;
 
-namespace Apps.App.Actions;
+namespace Apps.GoogleVertexAI.Actions;
 
 [ActionList]
-public class Actions : AppInvocable
+public class Actions : VertexAiInvocable
 {
     public Actions(InvocationContext invocationContext) : base(invocationContext)
     {

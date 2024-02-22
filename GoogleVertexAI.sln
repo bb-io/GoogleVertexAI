@@ -1,5 +1,5 @@
 ﻿Microsoft Visual Studio Solution File, Format Version 12.00
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Apps.App", "Apps.App\Apps.App.csproj", "{EB25604E-8EBA-464E-BEDF-30EA95395AD3}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Apps.GoogleVertexAI", "Apps.GoogleVertexAI\Apps.GoogleVertexAI.csproj", "{EB25604E-8EBA-464E-BEDF-30EA95395AD3}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
