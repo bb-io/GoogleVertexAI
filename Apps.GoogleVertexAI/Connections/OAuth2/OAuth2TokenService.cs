@@ -30,7 +30,7 @@ public class OAuth2TokenService : BaseInvocable, IOAuth2TokenService
             { "grant_type", "authorization_code" },
             { "client_id", ApplicationConstants.ClientId },
             { "client_secret", ApplicationConstants.ClientSecret },
-            { "redirect_uri", InvocationContext.UriInfo.AuthorizationCodeRedirectUri.ToString() },
+            { "redirect_uri", $"{InvocationContext.UriInfo.BridgeServiceUrl.ToString().TrimEnd('/')}/AuthorizationCode" },
             { "code", code }
         };
 
