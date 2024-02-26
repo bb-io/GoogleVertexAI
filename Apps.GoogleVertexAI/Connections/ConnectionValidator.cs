@@ -1,6 +1,6 @@
 ﻿using Apps.GoogleVertexAI.Api;
 using Apps.GoogleVertexAI.Constants;
-using Apps.GoogleVertexAI.Models.Parameters;
+using Apps.GoogleVertexAI.Models.Parameters.Gemini;
 using Blackbird.Applications.Sdk.Common.Authentication;
 using Blackbird.Applications.Sdk.Common.Connections;
 using RestSharp;
@@ -16,7 +16,7 @@ public class ConnectionValidator: IConnectionValidator
         var client = new VertexAiClient(authenticationCredentialsProviders);
         var pingRequest =
             new VertexAiRequest(string.Format(Endpoints.GeminiGenerateContent, ModelIds.GeminiPro), Method.Post)
-                .WithJsonBody(new GeminiParameters(new("Ping"), new(10)));
+                .WithJsonBody(new GeminiParameters(new[] { new PromptData("Ping") }, new(MaxOutputTokens: 10)));
 
         try
         {

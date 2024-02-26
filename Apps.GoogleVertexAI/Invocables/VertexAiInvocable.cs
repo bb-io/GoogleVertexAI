@@ -7,6 +7,7 @@ namespace Apps.GoogleVertexAI.Invocables;
 public class VertexAiInvocable : BaseInvocable
 {
     protected VertexAiClient Client { get; }
+    
     protected VertexAiInvocable(InvocationContext invocationContext) : base(invocationContext)
     {
         Client = new(InvocationContext.AuthenticationCredentialsProviders);
