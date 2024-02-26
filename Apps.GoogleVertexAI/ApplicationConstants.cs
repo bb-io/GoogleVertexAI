@@ -1,4 +1,4 @@
-﻿namespace Apps.GoogleVertexAI.Constants;
+﻿namespace Apps.GoogleVertexAI;
 
 public static class ApplicationConstants
 {
