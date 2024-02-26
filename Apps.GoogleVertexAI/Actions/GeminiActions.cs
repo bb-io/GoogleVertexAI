@@ -1,5 +1,6 @@
 using Apps.GoogleVertexAI.Api;
 using Apps.GoogleVertexAI.Constants;
+using Apps.GoogleVertexAI.Extensions;
 using Apps.GoogleVertexAI.Invocables;
 using Apps.GoogleVertexAI.Models.Parameters.Gemini;
 using Apps.GoogleVertexAI.Models.Requests.Gemini;
@@ -34,10 +35,14 @@ public class GeminiActions : VertexAiInvocable
     {
         if (input.Image != null && input.Video != null)
             throw new Exception("Please include either an image or a video, but not both.");
-
+        
+        var prompt = input.Prompt;
         var modelId = ModelIds.GeminiPro;
         InlineData? inlineData = null;
         IEnumerable<SafetySetting>? safetySettings = null;
+
+        if (input.IsBlackbirdPrompt != null && input.IsBlackbirdPrompt == true)
+            prompt = input.Prompt.FromBlackbirdPrompt();
 
         if (input.Image != null)
         {
@@ -60,7 +65,7 @@ public class GeminiActions : VertexAiInvocable
                 .Take(Math.Min(input.SafetyCategories.Count(), input.SafetyCategoryThresholds.Count()))
                 .Zip(input.SafetyCategoryThresholds, (category, threshold) => new SafetySetting(category, threshold));
         
-        var requestBody = new GeminiParameters(new PromptData[] { new(input.Prompt), new(inlineData) },
+        var requestBody = new GeminiParameters(new PromptData[] { new(prompt), new(inlineData) },
             new(input.MaxOutputTokens, input.Temperature, input.TopP, input.TopK), safetySettings);
         
         var request =
