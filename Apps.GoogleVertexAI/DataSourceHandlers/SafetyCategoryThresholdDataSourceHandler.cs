@@ -6,9 +6,9 @@ public class SafetyCategoryThresholdDataSourceHandler : EnumDataHandler
 {
     protected override Dictionary<string, string> EnumValues => new()
     {
-        { "BLOCK_NONE", "Block none" },
-        { "BLOCK_LOW_AND_ABOVE", "Block low and above" },
-        { "BLOCK_MEDIUM_AND_ABOVE", "Block medium and above" },
-        { "BLOCK_ONLY_HIGH", "Block only high" }
+        { "BlockNone", "Block none" },
+        { "BlockLowAndAbove", "Block low and above" },
+        { "BlockMediumAndAbove", "Block medium and above" },
+        { "BlockOnlyHigh", "Block only high" }
     };
 }

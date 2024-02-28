@@ -3,5 +3,5 @@
 public static class CredNames
 {
     public const string ProjectId = "ProjectId";
-    public const string AccessToken = "access_token";
+    public const string ServiceAccountConfString = "ServiceAccountConfString";
 }

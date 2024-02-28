@@ -10,12 +10,13 @@ public class ConnectionDefinition : IConnectionDefinition
     {
         new()
         {
-            Name = "OAuth",
-            AuthenticationType = ConnectionAuthenticationType.OAuth2,
+            Name = "Service account",
+            AuthenticationType = ConnectionAuthenticationType.Undefined,
             ConnectionUsage = ConnectionUsage.Actions,
             ConnectionProperties = new List<ConnectionProperty>
             {
-                new(CredNames.ProjectId) { DisplayName = "Project ID" }
+                new(CredNames.ProjectId) { DisplayName = "Project ID" },
+                new(CredNames.ServiceAccountConfString) { DisplayName = "Service account configuration string" }
             }
         }
     };

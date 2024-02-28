@@ -1,15 +1,20 @@
-using Apps.GoogleVertexAI.Api;
+using Apps.GoogleVertexAI.Constants;
+using Apps.GoogleVertexAI.Factories;
 using Blackbird.Applications.Sdk.Common;
 using Blackbird.Applications.Sdk.Common.Invocation;
+using Blackbird.Applications.Sdk.Utils.Extensions.Sdk;
+using Google.Cloud.AIPlatform.V1;
 
 namespace Apps.GoogleVertexAI.Invocables;
 
 public class VertexAiInvocable : BaseInvocable
 {
-    protected VertexAiClient Client { get; }
+    protected readonly PredictionServiceClient Client;
+    protected readonly string ProjectId;
     
     protected VertexAiInvocable(InvocationContext invocationContext) : base(invocationContext)
     {
-        Client = new(InvocationContext.AuthenticationCredentialsProviders);
+        Client = ClientFactory.Create(invocationContext.AuthenticationCredentialsProviders);
+        ProjectId = invocationContext.AuthenticationCredentialsProviders.Get(CredNames.ProjectId).Value;
     }
 }
