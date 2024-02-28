@@ -15,16 +15,27 @@ Before you can connect you need to make sure that:
 - You have selected or created a [Cloud Platform project](https://console.cloud.google.com/project).
 - You have [enabled billing](https://cloud.google.com/billing/docs/how-to/modify-project) for your project.
 - You have [enabled the Vertex AI API](https://console.cloud.google.com/flows/enableapi?apiid=aiplatform.googleapis.com).
+- You have created a service account and generated JSON keys.
+
+### Creating service account and generating JSON keys
+
+1. Navigate to the selected or created [Cloud Platform project](https://console.cloud.google.com/project).
+2. Go to the _IAM & Admin_ section.
+3. On the left sidebar, select _Service accounts_.
+4. Click _Create service account_.
+5. Enter a service account name and, optionally, a description. Click _Create and continue_. Select the _Vertex AI Administrator_ role for the service account and click _Continue_. Finally, click _Done_.
+6. From the service accounts list, select the newly created service account and navigate to the _Keys_ section.
+7. Click _Add key_ => _Create new key_. Choose the _JSON_ key type and click _Create_.
+8. Open the downloaded JSON file and copy its contents, which will be used in the _Service account configuration string_ connection parameter.
 
 ## Connecting
 
 1. Navigate to apps and search for Google Vertex AI. If you cannot find Google Vertex AI then click _Add App_ in the top right corner, select Google Vertex AI and add the app to your Blackbird environment.
 2. Click _Add Connection_.
 3. Name your connection for future reference e.g. 'My organization'.
-4. Fill in the project ID of the selected project.
-5. Click _Authorize connection_.
-6. Follow the instructions that Google gives you, authorizing Blackbird.io to act on your behalf.
-7. When you return to Blackbird, confirm that the connection has appeared and the status is _Connected_.
+4. Fill in the project ID of the selected project and the JSON configuration string obtained in the previous step.
+5. Click _Connect_.
+6. Confirm that the connection has appeared and the status is _Connected_.
 
 ![Connecting](image/README/connecting.png)
 
