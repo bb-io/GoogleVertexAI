@@ -1,27 +1,47 @@
-﻿using Apps.GoogleVertexAI.Api;
-using Apps.GoogleVertexAI.Constants;
-using Apps.GoogleVertexAI.Models.Parameters;
+﻿using Apps.GoogleVertexAI.Constants;
+using Apps.GoogleVertexAI.Factories;
 using Blackbird.Applications.Sdk.Common.Authentication;
 using Blackbird.Applications.Sdk.Common.Connections;
-using RestSharp;
+using Blackbird.Applications.Sdk.Utils.Extensions.Sdk;
+using Google.Cloud.AIPlatform.V1;
 
 namespace Apps.GoogleVertexAI.Connections;
 
-public class ConnectionValidator: IConnectionValidator
+public class ConnectionValidator : IConnectionValidator
 {
     public async ValueTask<ConnectionValidationResponse> ValidateConnection(
         IEnumerable<AuthenticationCredentialsProvider> authenticationCredentialsProviders,
         CancellationToken cancellationToken)
     {
-        var client = new VertexAiClient(authenticationCredentialsProviders);
-        var pingRequest =
-            new VertexAiRequest(string.Format(Endpoints.GeminiGenerateContent, ModelIds.GeminiPro), Method.Post)
-                .WithJsonBody(new GeminiParameters(new("Ping"), new(10)));
+        var client = ClientFactory.Create(authenticationCredentialsProviders);
 
         try
         {
-            await client.ExecuteWithErrorHandling(pingRequest);
+            var projectId = authenticationCredentialsProviders.Get(CredNames.ProjectId).Value;
+            var endpoint = EndpointName
+                .FromProjectLocationPublisherModel(projectId, Urls.Location, PublisherIds.Google, ModelIds.GeminiPro)
+                .ToString();
+            
+            var content = new Content
+            {
+                Role = "USER",
+                Parts = { new Part { Text = "Ping" } }
+            };
 
+            var generateContentRequest = new GenerateContentRequest
+            {
+                Model = endpoint,
+                GenerationConfig = new GenerationConfig { MaxOutputTokens = 10 }
+            };
+            generateContentRequest.Contents.Add(content);
+
+            using var response = client.StreamGenerateContent(generateContentRequest);
+            var responseStream = response.GetResponseStream();
+            
+            await foreach (var responseItem in responseStream)
+            {
+            }
+            
             return new()
             {
                 IsValid = true

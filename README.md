@@ -6,7 +6,42 @@ Blackbird is the new automation backbone for the language technology industry. B
 
 <!-- begin docs -->
 
-Documentation coming soon.
+Vertex AI is a comprehensive platform offering access to powerful multimodal models like Gemini from Google, enabling developers to seamlessly combine various inputs such as text, images, video, or code. With a diverse selection of models, Vertex AI facilitates easy customization and integration, allowing for the development and deployment of AI applications. The platform provides generative AI models, fully managed tools, and purpose-built MLOps solutions to streamline the entire machine learning lifecycle—from training and tuning to deployment and monitoring.
+
+## Before setting up
+
+Before you can connect you need to make sure that:
+
+- You have selected or created a [Cloud Platform project](https://console.cloud.google.com/project).
+- You have [enabled billing](https://cloud.google.com/billing/docs/how-to/modify-project) for your project.
+- You have [enabled the Vertex AI API](https://console.cloud.google.com/flows/enableapi?apiid=aiplatform.googleapis.com).
+- You have created a service account and generated JSON keys.
+
+### Creating service account and generating JSON keys
+
+1. Navigate to the selected or created [Cloud Platform project](https://console.cloud.google.com/project).
+2. Go to the _IAM & Admin_ section.
+3. On the left sidebar, select _Service accounts_.
+4. Click _Create service account_.
+5. Enter a service account name and, optionally, a description. Click _Create and continue_. Select the _Vertex AI Administrator_ role for the service account and click _Continue_. Finally, click _Done_.
+6. From the service accounts list, select the newly created service account and navigate to the _Keys_ section.
+7. Click _Add key_ => _Create new key_. Choose the _JSON_ key type and click _Create_.
+8. Open the downloaded JSON file and copy its contents, which will be used in the _Service account configuration string_ connection parameter.
+
+## Connecting
+
+1. Navigate to apps and search for Google Vertex AI. If you cannot find Google Vertex AI then click _Add App_ in the top right corner, select Google Vertex AI and add the app to your Blackbird environment.
+2. Click _Add Connection_.
+3. Name your connection for future reference e.g. 'My organization'.
+4. Fill in the project ID of the selected project and the JSON configuration string obtained in the previous step.
+5. Click _Connect_.
+6. Confirm that the connection has appeared and the status is _Connected_.
+
+![Connecting](image/README/connecting.png)
+
+## Actions
+
+- **Generate text with Gemini** generates text using Gemini model. If text generation is based on a single prompt, it's executed with the gemini-1.0-pro model. Optionally, you can specify an image or video to perform generation with the gemini-1.0-pro-vision model. Both image and video have a size limit of 20 MB. If an image is already present, video cannot be specified and vice versa. Supported image formats are PNG and JPEG, while video formats include MOV, MPEG, MP4, MPG, AVI, WMV, MPEGPS, and FLV. Optionally, set _Is Blackbird prompt_ to _True_ to indicate that the prompt given to the action is the result of one of AI Utilities app's actions. You can also specify safety categories in the _Safety categories_ input parameter and respective thresholds for them in the _Thresholds for safety categories_ input parameter. If one list has more items than the other, extra ones are ignored.
 
 ## Feedback
 
