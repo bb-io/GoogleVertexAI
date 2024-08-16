@@ -162,11 +162,11 @@ public class GeminiActions : VertexAiInvocable
         var list = xliffDocument.TranslationUnits.Select(x => x.Source).ToList();
 
         var (translatedTexts, usage) = await GetTranslations(prompt, xliffDocument, model, systemPrompt, list,
-            bucketSize ?? 15,
+            bucketSize ?? 1500,
             glossary.Glossary, promptRequest);
 
         var updatedDocument =
-            UpdateXliffDocumentWithTranslations(xliffDocument, translatedTexts, input.UpdateLockedSegments ?? false);
+            UpdateXliffDocumentWithTranslations(xliffDocument, translatedTexts, true);
         var fileReference = await UploadUpdatedDocument(updatedDocument, input.File);
         return new TranslateXliffResponse { File = fileReference, Usage = usage };
     }
