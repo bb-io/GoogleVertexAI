@@ -59,7 +59,7 @@ Before you can connect you need to make sure that:
 
 - **Post-edit XLIFF file** Updates the targets of XLIFF 1.2 files
 
-Optional inputs:
+	Optional inputs:
 	- Prompt: Add your linguistic criteria for postediting targets.
 	- Bucket size: Amount of translation units to process in the same request. (See dedicated section)
 	- Source and Target languages: By default, we get these values from the XLIFF header. You can provide different values, no specific format required.
