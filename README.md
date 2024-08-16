@@ -43,6 +43,35 @@ Before you can connect you need to make sure that:
 
 - **Generate text with Gemini** generates text using Gemini model. If text generation is based on a single prompt, it's executed with the gemini-1.0-pro model. Optionally, you can specify an image or video to perform generation with the gemini-1.0-pro-vision model. Both image and video have a size limit of 20 MB. If an image is already present, video cannot be specified and vice versa. Supported image formats are PNG and JPEG, while video formats include MOV, MPEG, MP4, MPG, AVI, WMV, MPEGPS, and FLV. Optionally, set _Is Blackbird prompt_ to _True_ to indicate that the prompt given to the action is the result of one of AI Utilities app's actions. You can also specify safety categories in the _Safety categories_ input parameter and respective thresholds for them in the _Thresholds for safety categories_ input parameter. If one list has more items than the other, extra ones are ignored.
 
+- **Get Quality Scores for XLIFF file** Gets segment and file level quality scores for XLIFF files. Supports only version 1.2 of XLIFF currently. Optionally, you can add Threshold, New Target State and Condition input parameters to the Blackbird action to change the target state value of segments meeting the desired criteria (all three must be filled).
+
+    Optional inputs:
+	- Prompt: Add your criteria for scoring each source-target pair. If none are provided, this is replaced by _"accuracy, fluency, consistency, style, grammar and spelling"_.
+	- Bucket size: Amount of translation units to process in the same request. (See dedicated section)
+	- Source and Target languages: By defualt, we get these values from the XLIFF header. You can provide different values, no specific format required. 
+	- Threshold: value between 0-10.
+	- Condition: Criteria to filter segments whose target state will be modified.
+	- New Target State: value to update target state to for filtered translation units.
+
+    Output:
+	- Average Score: aggregated score of all segment level scores.
+	- Updated XLIFF file: segment level score added to extradata attribute & updated target state when instructed.
+
+- **Post-edit XLIFF file** Updates the targets of XLIFF 1.2 files
+
+Optional inputs:
+	- Prompt: Add your linguistic criteria for postediting targets.
+	- Bucket size: Amount of translation units to process in the same request. (See dedicated section)
+	- Source and Target languages: By default, we get these values from the XLIFF header. You can provide different values, no specific format required.
+	- Glossary
+	- Update locked segments: If true, locked segments will be updated, otherwise they will be skipped. By default, this is set to false.
+
+- **Process XLIFF file** given an XLIFF file, processes each translation unit according to provided instructions (default is to translate source tags) and updates the target text for each unit. Supports only version 1.2 of XLIFF currently.
+
+### Bucket size, performance and cost
+
+XLIFF files can contain a lot of segments. Each action takes your segments and sends them to OpenAI for processing. It's possible that the amount of segments is so high that the prompt exceeds to model's context window or that the model takes longer than Blackbird actions are allowed to take. This is why we have introduced the bucket size parameter. You can tweak the bucket size parameter to determine how many segments to send to OpenAI at once. This will allow you to split the workload into different OpenAI calls. The trade-off is that the same context prompt needs to be send along with each request (which increases the tokens used). From experiments we have found that a bucket size of 1500 is sufficient for gpt-4o. That's why 1500 is the default bucket size, however other models may require different bucket sizes.
+
 ## Feedback
 
 Do you want to use this app or do you have feedback on our implementation? Reach out to us using the [established channels](https://www.blackbird.io/) or create an issue.
