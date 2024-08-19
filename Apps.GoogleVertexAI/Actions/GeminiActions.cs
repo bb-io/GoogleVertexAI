@@ -86,7 +86,7 @@ public class GeminiActions : VertexAiInvocable
                     })
             : Enumerable.Empty<SafetySetting>();
 
-        var endpoint = EndpointName
+        var endpoint = input.ModelEndpoint ?? EndpointName
             .FromProjectLocationPublisherModel(ProjectId, Urls.Location, PublisherIds.Google, modelId)
             .ToString();
 
@@ -157,7 +157,7 @@ public class GeminiActions : VertexAiInvocable
             return new TranslateXliffResponse { File = input.File, Usage = new UsageDto() };
         }
 
-        var model = ModelIds.GeminiPro;
+        var model = promptRequest.ModelEndpoint ?? ModelIds.GeminiPro;
         string systemPrompt = GetSystemPrompt(string.IsNullOrEmpty(prompt));
         var list = xliffDocument.TranslationUnits.Select(x => x.Source).ToList();
 
@@ -187,7 +187,7 @@ public class GeminiActions : VertexAiInvocable
         int? bucketSize = 1500)
     {
         var xliffDocument = await LoadAndParseXliffDocument(input.File);
-        var model = ModelIds.GeminiPro;
+        var model = promptRequest.ModelEndpoint ?? ModelIds.GeminiPro;
         string criteriaPrompt = string.IsNullOrEmpty(prompt)
             ? "accuracy, fluency, consistency, style, grammar and spelling"
             : prompt;
@@ -289,7 +289,7 @@ public class GeminiActions : VertexAiInvocable
         var fileStream = await _fileManagementClient.DownloadAsync(input.File);
         var xliffDocument = Utils.Xliff.Extensions.ParseXLIFF(fileStream);
 
-        var model = ModelIds.GeminiPro;
+        var model = promptRequest.ModelEndpoint ?? ModelIds.GeminiPro;
         var results = new Dictionary<string, string>();
         var batches = xliffDocument.TranslationUnits.Batch((int)bucketSize);
         var src = input.SourceLanguage ?? xliffDocument.SourceLanguage;
