@@ -15,7 +15,7 @@ public class ConnectionDefinition : IConnectionDefinition
             ConnectionUsage = ConnectionUsage.Actions,
             ConnectionProperties = new List<ConnectionProperty>
             {
-                new(CredNames.ProjectId) { DisplayName = "Project ID" },
+                //new(CredNames.ProjectId) { DisplayName = "Project ID" },
                 new(CredNames.ServiceAccountConfString) { DisplayName = "Service account configuration string" }
             }
         }

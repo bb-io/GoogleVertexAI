@@ -33,11 +33,13 @@ Before you can connect you need to make sure that:
 1. Navigate to apps and search for Google Vertex AI. If you cannot find Google Vertex AI then click _Add App_ in the top right corner, select Google Vertex AI and add the app to your Blackbird environment.
 2. Click _Add Connection_.
 3. Name your connection for future reference e.g. 'My organization'.
-4. Fill in the project ID of the selected project and the JSON configuration string obtained in the previous step.
+4. Fill in the JSON configuration string obtained in the previous step.
 5. Click _Connect_.
 6. Confirm that the connection has appeared and the status is _Connected_.
 
 ![Connecting](image/README/connecting.png)
+
+> Note: Currently the app works for models stored in the location *us-west1*. If you have other requirements please let us know!
 
 ## Actions
 
