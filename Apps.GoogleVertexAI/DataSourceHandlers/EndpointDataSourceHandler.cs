@@ -19,8 +19,8 @@ public class EndpointDataSourceHandler : VertexAiInvocable, IAsyncDataSourceHand
         {
             JsonCredentials = Creds.Get(CredNames.ServiceAccountConfString).Value,
             Endpoint = Urls.ApiUrl
-        }.Build();
-        
+        }.Build();        
+
         var res = endpointService.ListEndpointsAsync($"projects/{ProjectId}/locations/{Urls.Location}");
         var result = new List<Endpoint>();
         await foreach (var endpoint in res)

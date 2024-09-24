@@ -1,9 +1,12 @@
 ﻿using Apps.GoogleVertexAI.Constants;
 using Apps.GoogleVertexAI.Factories;
+using Apps.GoogleVertexAI.Models.Dto;
 using Blackbird.Applications.Sdk.Common.Authentication;
 using Blackbird.Applications.Sdk.Common.Connections;
+using Blackbird.Applications.Sdk.Common.Invocation;
 using Blackbird.Applications.Sdk.Utils.Extensions.Sdk;
 using Google.Cloud.AIPlatform.V1;
+using Newtonsoft.Json;
 
 namespace Apps.GoogleVertexAI.Connections;
 
@@ -13,34 +16,19 @@ public class ConnectionValidator : IConnectionValidator
         IEnumerable<AuthenticationCredentialsProvider> authenticationCredentialsProviders,
         CancellationToken cancellationToken)
     {
-        var client = ClientFactory.Create(authenticationCredentialsProviders);
-
         try
         {
-            var projectId = authenticationCredentialsProviders.Get(CredNames.ProjectId).Value;
-            var endpoint = EndpointName
-                .FromProjectLocationPublisherModel(projectId, Urls.Location, PublisherIds.Google, ModelIds.GeminiPro)
-                .ToString();
-            
-            var content = new Content
-            {
-                Role = "USER",
-                Parts = { new Part { Text = "Ping" } }
-            };
+            var serviceConfig = JsonConvert.DeserializeObject<ServiceAccountConfig>(authenticationCredentialsProviders.Get(CredNames.ServiceAccountConfString).Value);
+            if (serviceConfig == null) throw new Exception("The service config string was not properly formatted");
+            var projectId = serviceConfig.ProjectId;
 
-            var generateContentRequest = new GenerateContentRequest
+            var endpointService = new EndpointServiceClientBuilder()
             {
-                Model = endpoint,
-                GenerationConfig = new GenerationConfig { MaxOutputTokens = 10 }
-            };
-            generateContentRequest.Contents.Add(content);
+                JsonCredentials = authenticationCredentialsProviders.Get(CredNames.ServiceAccountConfString).Value,
+                Endpoint = Urls.ApiUrl
+            }.Build();
 
-            using var response = client.StreamGenerateContent(generateContentRequest);
-            var responseStream = response.GetResponseStream();
-            
-            await foreach (var responseItem in responseStream)
-            {
-            }
+            var res = endpointService.ListEndpointsAsync($"projects/{projectId}/locations/{Urls.Location}");           
             
             return new()
             {
