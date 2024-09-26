@@ -28,8 +28,13 @@ public class ConnectionValidator : IConnectionValidator
                 Endpoint = Urls.ApiUrl
             }.Build();
 
-            var res = endpointService.ListEndpointsAsync($"projects/{projectId}/locations/{Urls.Location}");           
-            
+            var res = endpointService.ListEndpointsAsync($"projects/{projectId}/locations/{Urls.Location}");
+            var result = new List<Endpoint>();
+            await foreach (var endpoint in res)
+            {
+                result.Add(endpoint);
+            }
+
             return new()
             {
                 IsValid = true
