@@ -45,7 +45,7 @@ Before you can connect you need to make sure that:
 
 - **Generate text with Gemini** generates text using Gemini model. If text generation is based on a single prompt, it's executed with the gemini-1.0-pro model. Optionally, you can specify an image or video to perform generation with the gemini-1.0-pro-vision model. Both image and video have a size limit of 20 MB. If an image is already present, video cannot be specified and vice versa. Supported image formats are PNG and JPEG, while video formats include MOV, MPEG, MP4, MPG, AVI, WMV, MPEGPS, and FLV. Optionally, set _Is Blackbird prompt_ to _True_ to indicate that the prompt given to the action is the result of one of AI Utilities app's actions. You can also specify safety categories in the _Safety categories_ input parameter and respective thresholds for them in the _Thresholds for safety categories_ input parameter. If one list has more items than the other, extra ones are ignored.
 
-- **Get Quality Scores for XLIFF file** Gets segment and file level quality scores for XLIFF files. Supports only version 1.2 of XLIFF currently. Optionally, you can add Threshold, New Target State and Condition input parameters to the Blackbird action to change the target state value of segments meeting the desired criteria (all three must be filled).
+- **Get Quality Scores for XLIFF file** Gets segment and file level quality scores for XLIFF files. Optionally, you can add Threshold, New Target State and Condition input parameters to the Blackbird action to change the target state value of segments meeting the desired criteria (all three must be filled).
 
     Optional inputs:
 	- Prompt: Add your criteria for scoring each source-target pair. If none are provided, this is replaced by _"accuracy, fluency, consistency, style, grammar and spelling"_.
@@ -59,7 +59,7 @@ Before you can connect you need to make sure that:
 	- Average Score: aggregated score of all segment level scores.
 	- Updated XLIFF file: segment level score added to extradata attribute & updated target state when instructed.
 
-- **Post-edit XLIFF file** Updates the targets of XLIFF 1.2 files
+- **Post-edit XLIFF file** Updates the targets of XLIFF file
 
 	Optional inputs:
 	- Prompt: Add your linguistic criteria for postediting targets.
@@ -67,7 +67,9 @@ Before you can connect you need to make sure that:
 	- Source and Target languages: By default, we get these values from the XLIFF header. You can provide different values, no specific format required.
 	- Glossary
 
-- **Process XLIFF file** given an XLIFF file, processes each translation unit according to provided instructions (default is to translate source tags) and updates the target text for each unit. This action supports only version 1.2 of XLIFF currently.
+- **Process XLIFF file** given an XLIFF file, processes each translation unit according to provided instructions (default is to translate source tags) and updates the target text for each unit.
+
+Note, that all XLIFF actions supports 1.2 and 2.1 versions of the XLIFF format, since these versions are the most commonly used in the industry. If you have a different version, please let us know and we will consider adding support for it.
 
 ### Bucket size, performance and cost
 
