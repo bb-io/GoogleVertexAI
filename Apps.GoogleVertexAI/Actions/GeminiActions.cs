@@ -152,27 +152,28 @@ public class GeminiActions : VertexAiInvocable
                  "Specify the number of source texts to be translated at once. Default value: 1500. (See our documentation for an explanation)")]
         int? bucketSize = 1500)
     {
-        var fileStream = await _fileManagementClient.DownloadAsync(input.File);
-        var xliffDocument = Utils.Xliff.Extensions.ParseXLIFF(fileStream);
-        if (xliffDocument.TranslationUnits.Count == 0)
-        {
-            return new TranslateXliffResponse { File = input.File, Usage = new UsageDto() };
-        }
+        var xliffDocument = await DownloadXliffDocumentAsync(input.File);
 
         var model = promptRequest.ModelEndpoint ?? ModelIds.GeminiPro;
-        string systemPrompt = GetSystemPrompt(string.IsNullOrEmpty(prompt));
+        var systemPrompt = GetSystemPrompt(string.IsNullOrEmpty(prompt));
         var list = xliffDocument.TranslationUnits.Select(x => x.Source).ToList();
 
         var (translatedTexts, usage) = await GetTranslations(prompt, xliffDocument, model, systemPrompt, list,
             bucketSize ?? 1500,
             glossary.Glossary, promptRequest);
-
-        var stream = await _fileManagementClient.DownloadAsync(input.File);
-        var updatedFile = Utils.Xliff.Extensions.UpdateOriginalFile(stream, translatedTexts);
-        string contentType = input.File.ContentType ?? "application/xml";
-        var fileReference = await _fileManagementClient.UploadAsync(updatedFile, contentType, input.File.Name);
+        
+        translatedTexts.ForEach(x =>
+        {
+            var translationUnit = xliffDocument.TranslationUnits.FirstOrDefault(tu => tu.Id == x.Key);
+            if (translationUnit != null)
+            {
+                translationUnit.Target = x.Value;
+            }
+        });
+        
+        var stream = xliffDocument.ToStream();
+        var fileReference = await _fileManagementClient.UploadAsync(stream, input.File.ContentType, input.File.Name);
         return new TranslateXliffResponse { File = fileReference, Usage = usage };
-
     }
 
     [Action("Get Quality Scores for XLIFF file",
@@ -190,10 +191,9 @@ public class GeminiActions : VertexAiInvocable
                  "Specify the number of translation units to be processed at once. Default value: 1500. (See our documentation for an explanation)")]
         int? bucketSize = 1500)
     {
-        var fileStream = await _fileManagementClient.DownloadAsync(input.File);
-        var xliffDocument = Utils.Xliff.Extensions.ParseXLIFF(fileStream);
+        var xliffDocument = await DownloadXliffDocumentAsync(input.File);
         var model = promptRequest.ModelEndpoint ?? ModelIds.GeminiPro;
-        string criteriaPrompt = string.IsNullOrEmpty(prompt)
+        var criteriaPrompt = string.IsNullOrEmpty(prompt)
             ? "accuracy, fluency, consistency, style, grammar and spelling"
             : prompt;
         var results = new Dictionary<string, float>();
@@ -205,7 +205,7 @@ public class GeminiActions : VertexAiInvocable
 
         foreach (var batch in batches)
         {
-            string userPrompt =
+            var userPrompt =
                 $"Your input is going to be a group of sentences in {src} and their translation into {tgt}. " +
                 "Only provide as output the ID of the sentence and the score number as a comma separated array of tuples. " +
                 $"Place the tuples in a same line and separate them using semicolons, example for two assessments: 2,7;32,5. The score number is a score from 1 to 10 assessing the quality of the translation, considering the following criteria: {criteriaPrompt}. Sentences: ";
@@ -225,23 +225,26 @@ public class GeminiActions : VertexAiInvocable
                 results.Add(split[0], float.Parse(split[1]));
             }
         }
-
-        var file = await _fileManagementClient.DownloadAsync(input.File);
-        string fileContent;
-        Encoding encoding;
-        using (var inFileStream = new StreamReader(file, true))
+        
+        results.ForEach(x =>
         {
-            encoding = inFileStream.CurrentEncoding;
-            fileContent = inFileStream.ReadToEnd();
-        }
-
-        foreach (var r in results)
-        {
-            fileContent = Regex.Replace(fileContent, @"(<trans-unit id=""" + r.Key + @""")",
-                @"${1} extradata=""" + r.Value + @"""");
-        }
-
-        if (input is { Threshold: not null, Condition: not null, State: not null })
+            var translationUnit = xliffDocument.TranslationUnits.FirstOrDefault(tu => tu.Id == x.Key);
+            if (translationUnit != null)
+            {
+                var attribute = translationUnit.Attributes.FirstOrDefault(x => x.Key == "extradata");
+                if (!string.IsNullOrEmpty(attribute.Key))
+                {
+                    translationUnit.Attributes.Remove(attribute.Key);
+                    translationUnit.Attributes.Add("extradata", x.Value.ToString());
+                }
+                else
+                {
+                    translationUnit.Attributes.Add("extradata", x.Value.ToString());
+                }
+            }
+        });
+        
+        if (input.Threshold != null && input.Condition != null && input.State != null)
         {
             var filteredTUs = new List<string>();
             switch (input.Condition)
@@ -262,15 +265,31 @@ public class GeminiActions : VertexAiInvocable
                     filteredTUs = results.Where(x => x.Value <= input.Threshold).Select(x => x.Key).ToList();
                     break;
             }
-
-            fileContent = UpdateTargetState(fileContent, input.State, filteredTUs);
+            
+            filteredTUs.ForEach(x =>
+            {
+                var translationUnit = xliffDocument.TranslationUnits.FirstOrDefault(tu => tu.Id == x);
+                if (translationUnit != null)
+                {
+                    var stateAttribute = translationUnit.Attributes.FirstOrDefault(x => x.Key == "state");
+                    if (!string.IsNullOrEmpty(stateAttribute.Key))
+                    {
+                        translationUnit.Attributes.Remove(stateAttribute.Key);
+                        translationUnit.Attributes.Add("state", input.State);
+                    }
+                    else
+                    {
+                        translationUnit.Attributes.Add("state", input.State);
+                    }
+                }
+            });
         }
 
+        var stream = xliffDocument.ToStream();
         return new ScoreXliffResponse
         {
             AverageScore = results.Average(x => x.Value),
-            File = await _fileManagementClient.UploadAsync(new MemoryStream(encoding.GetBytes(fileContent)),
-                MediaTypeNames.Text.Xml, input.File.Name),
+            File = await _fileManagementClient.UploadAsync(stream, MediaTypeNames.Text.Xml, input.File.Name),
             Usage = usage,
         };
     }
@@ -291,8 +310,7 @@ public class GeminiActions : VertexAiInvocable
                  "Specify the number of translation units to be processed at once. Default value: 1500. (See our documentation for an explanation)")]
         int? bucketSize = 1500)
     {
-        var fileStream = await _fileManagementClient.DownloadAsync(input.File);
-        var xliffDocument = Utils.Xliff.Extensions.ParseXLIFF(fileStream);
+        var xliffDocument = await DownloadXliffDocumentAsync(input.File);
 
         var model = promptRequest.ModelEndpoint ?? ModelIds.GeminiPro;
         var results = new Dictionary<string, string>();
@@ -344,11 +362,18 @@ public class GeminiActions : VertexAiInvocable
             }
         }
 
-        var updatedResults = Utils.Xliff.Extensions.CheckTagIssues(xliffDocument.TranslationUnits, results);
-        var originalFile = await _fileManagementClient.DownloadAsync(input.File);
-        var updatedFile = Utils.Xliff.Extensions.UpdateOriginalFile(originalFile, updatedResults);
+        var updatedResults = Blackbird.Xliff.Utils.Utils.XliffExtensions.CheckTagIssues(xliffDocument.TranslationUnits,results);
+        updatedResults.ForEach(x =>
+        {
+            var translationUnit = xliffDocument.TranslationUnits.FirstOrDefault(tu => tu.Id == x.Key);
+            if (translationUnit != null)
+            {
+                translationUnit.Target = x.Value;
+            }
+        });
 
-        var finalFile = await _fileManagementClient.UploadAsync(updatedFile, input.File.ContentType, input.File.Name);
+        var stream = xliffDocument.ToStream();
+        var finalFile = await _fileManagementClient.UploadAsync(stream, input.File.ContentType, input.File.Name);
         return new TranslateXliffResponse { File = finalFile, Usage = usage, };
     }
 
@@ -427,7 +452,7 @@ public class GeminiActions : VertexAiInvocable
     }
     //private async Task<(Dictionary<string, string>, UsageDto)> GetTranslations(string prompt, ParsedXliff xliff, string model,
     //string systemPrompt, int bucketSize, FileReference? glossary)
-    private async Task<(Dictionary<string, string>, UsageDto)> GetTranslations(string prompt, ParsedXliff xliff, string model,
+    private async Task<(Dictionary<string, string>, UsageDto)> GetTranslations(string prompt, XliffDocument xliff, string model,
         string systemPrompt, List<string> sourceTexts, int bucketSize, FileReference? glossary,
         PromptRequest promptRequest)
     {
@@ -487,7 +512,7 @@ public class GeminiActions : VertexAiInvocable
         return (results.ToDictionary(x => Regex.Match(x, "\\{ID:(.*?)\\}(.+)$").Groups[1].Value, y => Regex.Match(y, "\\{ID:(.*?)\\}(.+)$").Groups[2].Value), usageDto);
     }
 
-    string GetUserPrompt(string prompt, ParsedXliff xliffDocument, string json)
+    string GetUserPrompt(string prompt, XliffDocument xliffDocument, string json)
     {
         string instruction = string.IsNullOrEmpty(prompt)
             ? $"Translate the following texts from {xliffDocument.SourceLanguage} to {xliffDocument.TargetLanguage}."
@@ -570,5 +595,21 @@ public class GeminiActions : VertexAiInvocable
         {
             throw new Exception(exception.Message);
         }
+    }
+    
+    protected async Task<XliffDocument> DownloadXliffDocumentAsync(FileReference file)
+    {
+        var fileStream = await _fileManagementClient.DownloadAsync(file);
+        var xliffMemoryStream = new MemoryStream();
+        await fileStream.CopyToAsync(xliffMemoryStream);
+        xliffMemoryStream.Position = 0;
+
+        var xliffDocument = xliffMemoryStream.ToXliffDocument();
+        if (xliffDocument.TranslationUnits.Count == 0)
+        {
+            throw new InvalidOperationException("The XLIFF file does not contain any translation units.");
+        }
+
+        return xliffDocument;
     }
 }
