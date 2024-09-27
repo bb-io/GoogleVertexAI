@@ -176,7 +176,7 @@ public class GeminiActions : VertexAiInvocable
         return new TranslateXliffResponse { File = fileReference, Usage = usage };
     }
 
-    [Action("Get Quality Scores for XLIFF file",
+    [Action("Get quality scores for XLIFF file",
         Description = "Gets segment and file level quality scores for XLIFF files")]
     public async Task<ScoreXliffResponse> ScoreXLIFF(
         [ActionParameter] ScoreXliffRequest input, [ActionParameter,
@@ -211,18 +211,20 @@ public class GeminiActions : VertexAiInvocable
                 $"Place the tuples in a same line and separate them using semicolons, example for two assessments: 2,7;32,5. The score number is a score from 1 to 10 assessing the quality of the translation, considering the following criteria: {criteriaPrompt}. Sentences: ";
             foreach (var tu in batch)
             {
-                userPrompt += $" {tu.Id} {tu.Source} {tu.Target}";
+                userPrompt += $"{tu.Id}: {tu.Source} -> {tu.Target}\n";
             }
 
             var systemPrompt =
-                "You are a linguistic expert that should process the following texts accoring to the given instructions";
+                "You are a linguistic expert that should process the following texts accoring to the given instructions. Include in your response the ID of the sentence and the score number as a comma separated array of tuples without any additional information (it is crucial because your response will be deserialized programmatically).";
             var (result, promptUsage) = await ExecuteGeminiPrompt(promptRequest, model, userPrompt, systemPrompt);
             usage += promptUsage;
 
             foreach (var r in result.Split(";"))
             {
                 var split = r.Split(",");
-                results.Add(split[0], float.Parse(split[1]));
+                var id = split[0].Trim();
+                var score = float.Parse(split[1].Trim());
+                results.Add(id, score);
             }
         }
         
