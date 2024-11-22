@@ -23,10 +23,12 @@ Before you can connect you need to make sure that:
 2. Go to the _IAM & Admin_ section.
 3. On the left sidebar, select _Service accounts_.
 4. Click _Create service account_.
-5. Enter a service account name and, optionally, a description. Click _Create and continue_. Select the _Vertex AI Administrator_ role for the service account and click _Continue_. Finally, click _Done_.
-6. From the service accounts list, select the newly created service account and navigate to the _Keys_ section.
-7. Click _Add key_ => _Create new key_. Choose the _JSON_ key type and click _Create_.
-8. Open the downloaded JSON file and copy its contents, which will be used in the _Service account configuration string_ connection parameter.
+5. Enter a service account name and, optionally, a description. Click _Create and continue_. Select the _Vertex AI Administrator_ or _Vertex AI User_ role for the service account and click _Continue_. 
+![Creating service account](image/README/access.png)
+6. . Click _Done_.
+7. From the service accounts list, select the newly created service account and navigate to the _Keys_ section.
+8. Click _Add key_ => _Create new key_. Choose the _JSON_ key type and click _Create_.
+9. Open the downloaded JSON file and copy its contents, which will be used in the _Service account configuration string_ connection parameter.
 
 ## Connecting
 
