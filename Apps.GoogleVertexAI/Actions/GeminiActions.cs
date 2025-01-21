@@ -58,7 +58,7 @@ public class GeminiActions : VertexAiInvocable
         {
             await using var imageStream = await _fileManagementClient.DownloadAsync(input.Image);
             var imageBytes = await imageStream.GetByteData();
-            modelId = ModelIds.GeminiProVision;
+            modelId = ModelIds.GeminiProFlash;
             inlineDataPart = new Part
             {
                 InlineData = new Blob { Data = ByteString.CopyFrom(imageBytes), MimeType = input.Image.ContentType }
@@ -69,7 +69,7 @@ public class GeminiActions : VertexAiInvocable
         {
             await using var videoStream = await _fileManagementClient.DownloadAsync(input.Video);
             var videoBytes = await videoStream.GetByteData();
-            modelId = ModelIds.GeminiProVision;
+            modelId = ModelIds.GeminiProFlash;
             inlineDataPart = new Part
             {
                 InlineData = new Blob { Data = ByteString.CopyFrom(videoBytes), MimeType = input.Video.ContentType }
