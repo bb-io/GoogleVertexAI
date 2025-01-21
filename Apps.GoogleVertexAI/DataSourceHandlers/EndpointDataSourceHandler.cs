@@ -33,8 +33,8 @@ public class EndpointDataSourceHandler : VertexAiInvocable, IAsyncDataSourceHand
             {
                 Name = EndpointName
                     .FromProjectLocationPublisherModel(ProjectId, Urls.Location, PublisherIds.Google,
-                        ModelIds.GeminiProVision).ToString(),
-                DisplayName = ModelIds.GeminiProVision
+                        ModelIds.GeminiProFlash).ToString(),
+                DisplayName = ModelIds.GeminiProFlash
             })
             .Append(new()
             {

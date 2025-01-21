@@ -6,7 +6,7 @@
         <Nullable>enable</Nullable>
         <Product>Google Vertex AI</Product>
         <Description>Powerful and unified machine learning platform offered by Google Cloud</Description>
-        <Version>1.1.4</Version>
+        <Version>1.2.0</Version>
         <AssemblyName>Apps.GoogleVertexAI</AssemblyName>
     </PropertyGroup>
 
