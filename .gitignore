@@ -366,3 +366,5 @@ MigrationBackup/
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
 /ConsoleApp1
+/Tests.GoogleVertexAI/appsettings.json
+/Tests.GoogleVertexAI/service_account.json

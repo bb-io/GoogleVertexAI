@@ -3,6 +3,7 @@ using Apps.GoogleVertexAI.Factories;
 using Apps.GoogleVertexAI.Models.Dto;
 using Blackbird.Applications.Sdk.Common.Authentication;
 using Blackbird.Applications.Sdk.Common.Connections;
+using Blackbird.Applications.Sdk.Common.Exceptions;
 using Blackbird.Applications.Sdk.Common.Invocation;
 using Blackbird.Applications.Sdk.Utils.Extensions.Sdk;
 using Google.Cloud.AIPlatform.V1;
@@ -19,7 +20,7 @@ public class ConnectionValidator : IConnectionValidator
         try
         {
             var serviceConfig = JsonConvert.DeserializeObject<ServiceAccountConfig>(authenticationCredentialsProviders.Get(CredNames.ServiceAccountConfString).Value);
-            if (serviceConfig == null) throw new Exception("The service config string was not properly formatted");
+            if (serviceConfig == null) throw new PluginApplicationException("The service config string was not properly formatted");
             var projectId = serviceConfig.ProjectId;
 
             var endpointService = new EndpointServiceClientBuilder()
