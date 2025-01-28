@@ -23,6 +23,7 @@ using Google.Protobuf;
 using MoreLinq;
 using Newtonsoft.Json;
 using Apps.GoogleVertexAI.Utils.Xliff;
+using Blackbird.Applications.Sdk.Common.Exceptions;
 
 namespace Apps.GoogleVertexAI.Actions;
 
@@ -45,7 +46,7 @@ public class GeminiActions : VertexAiInvocable
     public async Task<GeneratedTextResponse> GenerateText([ActionParameter] GenerateTextRequest input)
     {
         if (input.Image != null && input.Video != null)
-            throw new Exception("Please include either an image or a video, but not both.");
+            throw new PluginMisconfigurationException("Please include either an image or a video, but not both.");
 
         var prompt = input.Prompt;
         var modelId = ModelIds.GeminiPro;
@@ -130,7 +131,7 @@ public class GeminiActions : VertexAiInvocable
         }
         catch (Exception exception)
         {
-            throw new Exception(exception.Message);
+            throw new PluginApplicationException(exception.Message);
         }
     }
 
@@ -217,14 +218,25 @@ public class GeminiActions : VertexAiInvocable
             var systemPrompt =
                 "You are a linguistic expert that should process the following texts accoring to the given instructions. Include in your response the ID of the sentence and the score number as a comma separated array of tuples without any additional information (it is crucial because your response will be deserialized programmatically).";
             var (result, promptUsage) = await ExecuteGeminiPrompt(promptRequest, model, userPrompt, systemPrompt);
+
             usage += promptUsage;
 
-            foreach (var r in result.Split(";"))
+            try
             {
-                var split = r.Split(",");
-                var id = split[0].Trim();
-                var score = float.Parse(split[1].Trim());
-                results.Add(id, score);
+                foreach (var r in result.Split(";"))
+                {
+                    var split = r.Split(",");
+                    var id = split[0].Trim();
+                    var score = float.Parse(split[1].Trim());
+                    results.Add(id, score);
+                }
+            }
+            catch (Exception ex)
+            {
+                throw new PluginApplicationException(
+                    $"Failed to parse the LLM response for this batch.\n" +
+                    $"Original LLM response:\n{result}\n" +
+                    $"Error detail: {ex.Message}", ex);
             }
         }
         
@@ -495,7 +507,7 @@ public class GeminiActions : VertexAiInvocable
 
                 if (result.Length != batch.Count())
                 {
-                    throw new InvalidOperationException(
+                    throw new PluginApplicationException(
                         "OpenAI returned inappropriate response. " +
                         "The number of translated texts does not match the number of source texts. " +
                         "Probably there is a duplication or a missing text in translation unit. " +
@@ -506,7 +518,7 @@ public class GeminiActions : VertexAiInvocable
             }
             catch (Exception e)
             {
-                throw new Exception(
+                throw new PluginApplicationException(
                     $"Failed to parse the translated text. Exception message: {e.Message}; Exception type: {e.GetType()}");
             }
         }
@@ -595,7 +607,7 @@ public class GeminiActions : VertexAiInvocable
         }
         catch (Exception exception)
         {
-            throw new Exception(exception.Message);
+            throw new PluginApplicationException($"Error: {exception.Message}");
         }
     }
     
@@ -609,7 +621,7 @@ public class GeminiActions : VertexAiInvocable
         var xliffDocument = xliffMemoryStream.ToXliffDocument();
         if (xliffDocument.TranslationUnits.Count == 0)
         {
-            throw new InvalidOperationException("The XLIFF file does not contain any translation units.");
+            throw new PluginApplicationException("The XLIFF file does not contain any translation units.");
         }
 
         return xliffDocument;
