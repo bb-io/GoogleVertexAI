@@ -46,7 +46,7 @@ public class GeminiActions : VertexAiInvocable
     public async Task<GeneratedTextResponse> GenerateText([ActionParameter] GenerateTextRequest input)
     {
         if (input.Image != null && input.Video != null)
-            throw new Exception("Please include either an image or a video, but not both.");
+            throw new PluginMisconfigurationException("Please include either an image or a video, but not both.");
 
         var prompt = input.Prompt;
         var modelId = ModelIds.GeminiPro;
@@ -131,7 +131,7 @@ public class GeminiActions : VertexAiInvocable
         }
         catch (Exception exception)
         {
-            throw new Exception(exception.Message);
+            throw new PluginApplicationException(exception.Message);
         }
     }
 
@@ -507,7 +507,7 @@ public class GeminiActions : VertexAiInvocable
 
                 if (result.Length != batch.Count())
                 {
-                    throw new InvalidOperationException(
+                    throw new PluginApplicationException(
                         "OpenAI returned inappropriate response. " +
                         "The number of translated texts does not match the number of source texts. " +
                         "Probably there is a duplication or a missing text in translation unit. " +
@@ -518,7 +518,7 @@ public class GeminiActions : VertexAiInvocable
             }
             catch (Exception e)
             {
-                throw new Exception(
+                throw new PluginApplicationException(
                     $"Failed to parse the translated text. Exception message: {e.Message}; Exception type: {e.GetType()}");
             }
         }
@@ -621,7 +621,7 @@ public class GeminiActions : VertexAiInvocable
         var xliffDocument = xliffMemoryStream.ToXliffDocument();
         if (xliffDocument.TranslationUnits.Count == 0)
         {
-            throw new InvalidOperationException("The XLIFF file does not contain any translation units.");
+            throw new PluginApplicationException("The XLIFF file does not contain any translation units.");
         }
 
         return xliffDocument;
