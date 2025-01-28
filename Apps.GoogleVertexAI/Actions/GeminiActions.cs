@@ -218,14 +218,25 @@ public class GeminiActions : VertexAiInvocable
             var systemPrompt =
                 "You are a linguistic expert that should process the following texts accoring to the given instructions. Include in your response the ID of the sentence and the score number as a comma separated array of tuples without any additional information (it is crucial because your response will be deserialized programmatically).";
             var (result, promptUsage) = await ExecuteGeminiPrompt(promptRequest, model, userPrompt, systemPrompt);
+
             usage += promptUsage;
 
-            foreach (var r in result.Split(";"))
+            try
             {
-                var split = r.Split(",");
-                var id = split[0].Trim();
-                var score = float.Parse(split[1].Trim());
-                results.Add(id, score);
+                foreach (var r in result.Split(";"))
+                {
+                    var split = r.Split(",");
+                    var id = split[0].Trim();
+                    var score = float.Parse(split[1].Trim());
+                    results.Add(id, score);
+                }
+            }
+            catch (Exception ex)
+            {
+                throw new PluginApplicationException(
+                    $"Failed to parse the LLM response for this batch.\n" +
+                    $"Original LLM response:\n{result}\n" +
+                    $"Error detail: {ex.Message}", ex);
             }
         }
         
