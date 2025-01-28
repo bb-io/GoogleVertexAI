@@ -11,8 +11,8 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="Blackbird.Applications.Sdk.Common" Version="2.6.0"/>
-        <PackageReference Include="Blackbird.Applications.Sdk.Utils" Version="1.0.24"/>
+        <PackageReference Include="Blackbird.Applications.Sdk.Common" Version="2.11.1" />
+        <PackageReference Include="Blackbird.Applications.Sdk.Utils" Version="1.0.24" />
         <PackageReference Include="Blackbird.Applications.Sdk.Glossaries.Utils" Version="1.0.1" />
         <PackageReference Include="Blackbird.Xliff.Utils" Version="1.1.6" />
         <PackageReference Include="Google.Cloud.AIPlatform.V1" Version="3.6.0" />
@@ -20,7 +20,7 @@
     </ItemGroup>
 
     <ItemGroup>
-        <EmbeddedResource CopyToOutputDirectory="Always" Include="image\icon.png"/>
+        <EmbeddedResource CopyToOutputDirectory="Always" Include="image\icon.png" />
     </ItemGroup>
 
     <ItemGroup>

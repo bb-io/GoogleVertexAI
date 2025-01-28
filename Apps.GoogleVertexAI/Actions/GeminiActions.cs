@@ -23,6 +23,7 @@ using Google.Protobuf;
 using MoreLinq;
 using Newtonsoft.Json;
 using Apps.GoogleVertexAI.Utils.Xliff;
+using Blackbird.Applications.Sdk.Common.Exceptions;
 
 namespace Apps.GoogleVertexAI.Actions;
 
@@ -595,7 +596,7 @@ public class GeminiActions : VertexAiInvocable
         }
         catch (Exception exception)
         {
-            throw new Exception(exception.Message);
+            throw new PluginApplicationException($"Error: {exception.Message}");
         }
     }
     
