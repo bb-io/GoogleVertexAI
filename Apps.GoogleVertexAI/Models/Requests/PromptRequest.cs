@@ -2,6 +2,7 @@ using Apps.GoogleVertexAI.DataSourceHandlers;
 using Apps.GoogleVertexAI.DataSourceHandlers.FloatParameterHandlers;
 using Apps.GoogleVertexAI.DataSourceHandlers.Static;
 using Blackbird.Applications.Sdk.Common;
+using Blackbird.Applications.Sdk.Common.Dictionaries;
 using Blackbird.Applications.Sdk.Common.Dynamic;
 
 namespace Apps.GoogleVertexAI.Models.Requests;
@@ -50,6 +51,6 @@ public class PromptRequest
     public IEnumerable<string>? SafetyCategoryThresholds { get; set; }
     
     [Display("Model endpoint")]
-    [DataSource(typeof(GeminiModelDataSourceHandler))]
+    [StaticDataSource(typeof(GeminiModelDataSourceHandler))]
     public string? ModelEndpoint { get; set; }
 }
