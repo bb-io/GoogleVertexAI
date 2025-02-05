@@ -24,7 +24,6 @@ using MoreLinq;
 using Newtonsoft.Json;
 using Apps.GoogleVertexAI.Utils.Xliff;
 using Blackbird.Applications.Sdk.Common.Exceptions;
-using Newtonsoft.Json.Linq;
 
 namespace Apps.GoogleVertexAI.Actions;
 
@@ -163,7 +162,7 @@ public class GeminiActions : VertexAiInvocable
         var (translatedTexts, usage) = await GetTranslations(prompt, xliffDocument, model, systemPrompt, list,
             bucketSize ?? 1500,
             glossary.Glossary, promptRequest);
-        
+
         translatedTexts.ForEach(x =>
         {
             var translationUnit = xliffDocument.TranslationUnits.FirstOrDefault(tu => tu.Id == x.Key);
@@ -172,7 +171,7 @@ public class GeminiActions : VertexAiInvocable
                 translationUnit.Target = x.Value;
             }
         });
-        
+
         var stream = xliffDocument.ToStream();
         var fileReference = await _fileManagementClient.UploadAsync(stream, input.File.ContentType, input.File.Name);
         return new TranslateXliffResponse { File = fileReference, Usage = usage };
@@ -240,7 +239,7 @@ public class GeminiActions : VertexAiInvocable
                     $"Error detail: {ex.Message}", ex);
             }
         }
-        
+
         results.ForEach(x =>
         {
             var translationUnit = xliffDocument.TranslationUnits.FirstOrDefault(tu => tu.Id == x.Key);
@@ -258,7 +257,7 @@ public class GeminiActions : VertexAiInvocable
                 }
             }
         });
-        
+
         if (input.Threshold != null && input.Condition != null && input.State != null)
         {
             var filteredTUs = new List<string>();
@@ -280,7 +279,7 @@ public class GeminiActions : VertexAiInvocable
                     filteredTUs = results.Where(x => x.Value <= input.Threshold).Select(x => x.Key).ToList();
                     break;
             }
-            
+
             filteredTUs.ForEach(x =>
             {
                 var translationUnit = xliffDocument.TranslationUnits.FirstOrDefault(tu => tu.Id == x);
@@ -377,7 +376,7 @@ public class GeminiActions : VertexAiInvocable
             }
         }
 
-        var updatedResults = Blackbird.Xliff.Utils.Utils.XliffExtensions.CheckTagIssues(xliffDocument.TranslationUnits,results);
+        var updatedResults = Blackbird.Xliff.Utils.Utils.XliffExtensions.CheckTagIssues(xliffDocument.TranslationUnits, results);
         updatedResults.ForEach(x =>
         {
             var translationUnit = xliffDocument.TranslationUnits.FirstOrDefault(tu => tu.Id == x.Key);
@@ -504,16 +503,6 @@ public class GeminiActions : VertexAiInvocable
 
             try
             {
-                var startIndex = translatedText.IndexOf("[");
-                if (startIndex == -1)
-                    throw new PluginApplicationException("Invalid JSON format: missing opening bracket.");
-
-                var extractedJson = translatedText.Substring(startIndex);
-
-                if (!IsValidJson(extractedJson))
-                {
-                    throw new PluginApplicationException($"Invalid JSON received from Vertex AI:\n{extractedJson}");
-                }
                 var result = JsonConvert.DeserializeObject<string[]>(translatedText.Substring(translatedText.IndexOf("[")));
 
                 if (result.Length != batch.Count())
@@ -526,6 +515,13 @@ public class GeminiActions : VertexAiInvocable
                 }
 
                 results.AddRange(result);
+            }
+            catch (JsonReaderException jsonEx)
+            {
+                throw new PluginApplicationException(
+                    "We encountered an issue while processing the response from the server. " +
+                    "It looks like the data format is incorrect, making it unreadable. " +
+                    "Please try again or adjust your request settings.\n");
             }
             catch (Exception e)
             {
@@ -621,7 +617,7 @@ public class GeminiActions : VertexAiInvocable
             throw new PluginApplicationException($"Error: {exception.Message}");
         }
     }
-    
+
     protected async Task<XliffDocument> DownloadXliffDocumentAsync(FileReference file)
     {
         var fileStream = await _fileManagementClient.DownloadAsync(file);
@@ -636,18 +632,5 @@ public class GeminiActions : VertexAiInvocable
         }
 
         return xliffDocument;
-    }
-
-    private bool IsValidJson(string json)
-    {
-        try
-        {
-            JToken.Parse(json);
-            return true;
-        }
-        catch (JsonReaderException)
-        {
-            return false;
-        }
     }
 }
