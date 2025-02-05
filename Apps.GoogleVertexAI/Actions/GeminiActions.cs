@@ -24,6 +24,7 @@ using MoreLinq;
 using Newtonsoft.Json;
 using Apps.GoogleVertexAI.Utils.Xliff;
 using Blackbird.Applications.Sdk.Common.Exceptions;
+using Newtonsoft.Json.Linq;
 
 namespace Apps.GoogleVertexAI.Actions;
 
@@ -503,12 +504,22 @@ public class GeminiActions : VertexAiInvocable
 
             try
             {
+                var startIndex = translatedText.IndexOf("[");
+                if (startIndex == -1)
+                    throw new PluginApplicationException("Invalid JSON format: missing opening bracket.");
+
+                var extractedJson = translatedText.Substring(startIndex);
+
+                if (!IsValidJson(extractedJson))
+                {
+                    throw new PluginApplicationException($"Invalid JSON received from Vertex AI:\n{extractedJson}");
+                }
                 var result = JsonConvert.DeserializeObject<string[]>(translatedText.Substring(translatedText.IndexOf("[")));
 
                 if (result.Length != batch.Count())
                 {
                     throw new PluginApplicationException(
-                        "OpenAI returned inappropriate response. " +
+                        "Server returned inappropriate response. " +
                         "The number of translated texts does not match the number of source texts. " +
                         "Probably there is a duplication or a missing text in translation unit. " +
                         "Try change model or bucket size (to lower values) or add retries to this action.");
@@ -625,5 +636,18 @@ public class GeminiActions : VertexAiInvocable
         }
 
         return xliffDocument;
+    }
+
+    private bool IsValidJson(string json)
+    {
+        try
+        {
+            JToken.Parse(json);
+            return true;
+        }
+        catch (JsonReaderException)
+        {
+            return false;
+        }
     }
 }
