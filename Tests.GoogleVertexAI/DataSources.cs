@@ -44,5 +44,21 @@ namespace Tests.GoogleVertexAI
             Assert.IsNotNull(result);
         }
 
+
+        [TestMethod]
+        public async Task XLIFFProcessReturnsValues()
+        {
+            var action = new GeminiActions(InvocationContext, FileManager);
+
+            var input = 0;
+
+            var inputFile = new TranslateXliffRequest { File = new Blackbird.Applications.Sdk.Common.Files.FileReference { Name= "test.xliff" } };
+
+            string input2 = "YOUR_PROMPT";
+            var input3 = new PromptRequest { ModelEndpoint = "gemini-1.5-flash" };
+            var input1 = new GlossaryRequest { };
+            var result = await action.TranslateXliff(inputFile, input3,input2, input1);
+            Assert.IsNotNull(result);
+        }
     }
 }
