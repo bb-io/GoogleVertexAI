@@ -13,7 +13,7 @@ namespace Tests.GoogleVertexAI
         public async Task XLIFFScoreReturnsValues()
         {
 
-            var action = new GeminiActions(InvocationContext,FileManager);
+            var action = new GeminiGenerateActions(InvocationContext,FileManager);
 
             var input = 0;
 
@@ -48,7 +48,7 @@ namespace Tests.GoogleVertexAI
         [TestMethod]
         public async Task XLIFFProcessReturnsValues()
         {
-            var action = new GeminiActions(InvocationContext, FileManager);
+            var action = new GeminiGenerateActions(InvocationContext, FileManager);
 
             var input = 0;
 
