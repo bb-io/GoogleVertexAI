@@ -3,7 +3,7 @@ using Blackbird.Applications.Sdk.Common.Files;
 
 namespace Apps.GoogleVertexAI.Models.Requests.Gemini;
 
-public class GenerateTextFromImageRequest: PromptRequest
+public class GenerateTextFromFileRequest: PromptRequest
 {
     public string Prompt { get; set; }
     
@@ -11,8 +11,9 @@ public class GenerateTextFromImageRequest: PromptRequest
                                                   "of one of the AI Utilities app's actions; defaults to 'False'.")]
     public bool? IsBlackbirdPrompt { get; set; }
     
-    [Display("Image", Description = "Image in PNG or JPEG format with a size limit of 20 MB. Cannot be added " +
-                                    "if a video is already included.")]
-    public FileReference Image { get; set; }
+    [Display("File", Description = "Image in PNG or JPEG format with a size limit of 20 MB." + 
+                                    "Video in any of the following formats: MOV, MPEG, MP4, MPG, AVI, WMV, " +
+                                    "MPEGPS, FLV, with a size limit of 20 MB.")]
+    public FileReference File { get; set; }
     
 }

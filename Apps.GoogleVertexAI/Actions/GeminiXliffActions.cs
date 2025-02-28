@@ -2,11 +2,9 @@ using System.Net.Mime;
 using System.Text;
 using System.Text.RegularExpressions;
 using Apps.GoogleVertexAI.Constants;
-using Apps.GoogleVertexAI.Extensions;
 using Apps.GoogleVertexAI.Invocables;
 using Apps.GoogleVertexAI.Models.Dto;
 using Apps.GoogleVertexAI.Models.Requests;
-using Apps.GoogleVertexAI.Models.Requests.Gemini;
 using Apps.GoogleVertexAI.Models.Response;
 using Blackbird.Applications.Sdk.Common;
 using Blackbird.Applications.Sdk.Common.Actions;
@@ -478,7 +476,7 @@ public class GeminiXliffActions : VertexAiInvocable
 
         try
         {
-            using var response = Client.StreamGenerateContent(generateContentRequest);
+            using var response = await Utils.ErrorHandler.ExecuteWithErrorHandlingAsync(async () => Client.StreamGenerateContent(generateContentRequest));
             var responseStream = response.GetResponseStream();
 
             var generatedText = new StringBuilder();
