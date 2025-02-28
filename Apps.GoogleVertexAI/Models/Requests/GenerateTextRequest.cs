@@ -1,6 +1,7 @@
-﻿using Apps.GoogleVertexAI.DataSourceHandlers;
-using Apps.GoogleVertexAI.DataSourceHandlers.FloatParameterHandlers;
+﻿using Apps.GoogleVertexAI.DataSourceHandlers.FloatParameterHandlers;
+using Apps.GoogleVertexAI.DataSourceHandlers.Static;
 using Blackbird.Applications.Sdk.Common;
+using Blackbird.Applications.Sdk.Common.Dictionaries;
 using Blackbird.Applications.Sdk.Common.Dynamic;
 using Blackbird.Applications.Sdk.Common.Files;
 
@@ -14,7 +15,7 @@ public class GenerateTextRequest : PromptRequest
                                                   "of one of the AI Utilities app's actions; defaults to 'False'.")]
     public bool? IsBlackbirdPrompt { get; set; }
 
-    [DataSource(typeof(AIModelDataSourceHandler))]
+    [StaticDataSource(typeof(AIModelDataSourceHandler))]
     [Display("AI model used")]
     public required string AIModel { get; set; }
 }
