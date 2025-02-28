@@ -3,7 +3,7 @@ using Blackbird.Applications.Sdk.Common.Dynamic;
 
 namespace Apps.GoogleVertexAI.DataSourceHandlers
 {
-    internal class AIModelDataSourceHandler : IStaticDataSourceItemHandler
+    public class AIModelDataSourceHandler : IStaticDataSourceItemHandler
     {
         public IEnumerable<DataSourceItem> GetData()
         {

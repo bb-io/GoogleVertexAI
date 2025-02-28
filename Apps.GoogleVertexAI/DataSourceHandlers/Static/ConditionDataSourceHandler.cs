@@ -1,20 +1,21 @@
 using Blackbird.Applications.Sdk.Common.Dictionaries;
+using Blackbird.Applications.Sdk.Common.Dynamic;
 
 namespace Apps.GoogleVertexAI.DataSourceHandlers.Static;
 
-public class ConditionDataSourceHandler : IStaticDataSourceHandler
+public class ConditionDataSourceHandler : IStaticDataSourceItemHandler
 {
-    private static Dictionary<string, string> EnumValues => new()
+    private static List<DataSourceItem> ConditionList => new()
     {
-        { ">", "Score is above threshold" },
-        { ">=", "Score is above or equal threshold" },
-        { "=", "Score is same as threshold" },
-        { "<", "Score is below threshold" },
-        { "<=", "Score is below or equal threshold" }
+        new DataSourceItem(">", "Score is above threshold"),
+        new DataSourceItem(">=", "Score is above or equal threshold" ),
+        new DataSourceItem("=", "Score is same as threshold" ),
+        new DataSourceItem("<", "Score is below threshold" ),
+        new DataSourceItem("<=", "Score is below or equal threshold" )
     };
 
-    public Dictionary<string, string> GetData()
+    IEnumerable<DataSourceItem> IStaticDataSourceItemHandler.GetData()
     {
-        return EnumValues;
+        return ConditionList;
     }
 }
