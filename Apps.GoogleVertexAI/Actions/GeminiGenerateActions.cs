@@ -1,8 +1,6 @@
 using System.Text;
 using Apps.GoogleVertexAI.Constants;
-using Apps.GoogleVertexAI.Extensions;
 using Apps.GoogleVertexAI.Invocables;
-using Apps.GoogleVertexAI.Models.Requests.Gemini;
 using Apps.GoogleVertexAI.Models.Response;
 using Blackbird.Applications.Sdk.Common;
 using Blackbird.Applications.Sdk.Common.Actions;
@@ -12,6 +10,7 @@ using Blackbird.Applications.Sdk.Utils.Extensions.Files;
 using Google.Cloud.AIPlatform.V1;
 using Google.Protobuf;
 using Blackbird.Applications.Sdk.Common.Exceptions;
+using Apps.GoogleVertexAI.Models.Requests;
 
 namespace Apps.GoogleVertexAI.Actions;
 
@@ -27,8 +26,7 @@ public class GeminiGenerateActions : VertexAiInvocable
     }
 
     [Action("Generate text with Gemini", Description = "Generate text using Gemini. Text generation based on a " +
-                                                       "single prompt is executed with the " +
-                                                         ModelIds.GeminiPro +
+                                                       "single prompt is executed with the chosen" +
                                                        " model.")]
     public async Task<GeneratedTextResponse> GenerateText([ActionParameter] GenerateTextRequest input)
     {
@@ -44,13 +42,13 @@ public class GeminiGenerateActions : VertexAiInvocable
             : Enumerable.Empty<SafetySetting>();
 
         var endpoint = input.ModelEndpoint ?? EndpointName
-            .FromProjectLocationPublisherModel(ProjectId, Urls.Location, PublisherIds.Google, ModelIds.GeminiPro)
+            .FromProjectLocationPublisherModel(ProjectId, Urls.Location, PublisherIds.Google, input.AIModel)
             .ToString();
 
         var content = new Content
         {
             Role = "USER",
-            Parts = { new Part { Text = input.IsBlackbirdPrompt == true ? input.Prompt.FromBlackbirdPrompt() : input.Prompt } }
+            Parts = { new Part { Text = input.IsBlackbirdPrompt == true ? FromBlackbirdPrompt(input.Prompt) : input.Prompt } }
         };
 
         var generateContentRequest = new GenerateContentRequest
@@ -87,8 +85,7 @@ public class GeminiGenerateActions : VertexAiInvocable
         }
     }
     [Action("Generate text from file with Gemini", Description = $"Generate text using Gemini. " +
-                                                   "Generation will be performed with the " + 
-                                                   ModelIds.GeminiProFlash +
+                                                   "Generation will be performed with the chosen" +
                                                    " model.")]
     public async Task<GeneratedTextResponse> GenerateTextFromFile([ActionParameter] GenerateTextFromFileRequest input)
     {
@@ -100,7 +97,7 @@ public class GeminiGenerateActions : VertexAiInvocable
             Role = "USER",
             Parts = 
             { 
-                new Part { Text = input.IsBlackbirdPrompt == true ? input.Prompt.FromBlackbirdPrompt() : input.Prompt }, 
+                new Part { Text = input.IsBlackbirdPrompt == true ? FromBlackbirdPrompt(input.Prompt) : input.Prompt }, 
                 new Part{ InlineData = new Blob { Data = ByteString.CopyFrom(fileBytes), MimeType = input.File.ContentType }}
             }
         };
@@ -117,7 +114,7 @@ public class GeminiGenerateActions : VertexAiInvocable
             : Enumerable.Empty<SafetySetting>();
 
         var endpoint = input.ModelEndpoint ?? EndpointName
-            .FromProjectLocationPublisherModel(ProjectId, Urls.Location, PublisherIds.Google, ModelIds.GeminiProFlash)
+            .FromProjectLocationPublisherModel(ProjectId, Urls.Location, PublisherIds.Google, input.AIModel)
             .ToString();
 
 
@@ -153,5 +150,17 @@ public class GeminiGenerateActions : VertexAiInvocable
         {
             throw new PluginApplicationException(exception.Message);
         }
+    }
+    private static string FromBlackbirdPrompt(string inputPrompt)
+    {
+        var promptSegments = inputPrompt.Split(";;");
+
+        if (promptSegments.Length == 1)
+            return promptSegments[0];
+
+        if (promptSegments.Length == 2 || promptSegments.Length == 3)
+            return $"{promptSegments[0]}\n\n{promptSegments[1]}";
+
+        throw new("Wrong blackbird prompt format");
     }
 }

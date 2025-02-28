@@ -52,7 +52,7 @@ public class GeminiXliffActions : VertexAiInvocable
     {
         var xliffDocument = await DownloadXliffDocumentAsync(input.File);
 
-        var model = promptRequest.ModelEndpoint ?? ModelIds.GeminiPro;
+        var model = promptRequest.ModelEndpoint ?? input.AIModel;
         var systemPrompt = GetSystemPrompt(string.IsNullOrEmpty(prompt));
         var list = xliffDocument.TranslationUnits.Select(x => x.Source).ToList();
 
@@ -90,7 +90,7 @@ public class GeminiXliffActions : VertexAiInvocable
         int? bucketSize = 1500)
     {
         var xliffDocument = await DownloadXliffDocumentAsync(input.File);
-        var model = promptRequest.ModelEndpoint ?? ModelIds.GeminiPro;
+        var model = promptRequest.ModelEndpoint ?? input.AIModel;
         var criteriaPrompt = string.IsNullOrEmpty(prompt)
             ? "accuracy, fluency, consistency, style, grammar and spelling"
             : prompt;
@@ -223,7 +223,7 @@ public class GeminiXliffActions : VertexAiInvocable
     {
         var xliffDocument = await DownloadXliffDocumentAsync(input.File);
 
-        var model = promptRequest.ModelEndpoint ?? ModelIds.GeminiPro;
+        var model = promptRequest.ModelEndpoint ?? input.AIModel;
         var results = new Dictionary<string, string>();
         var batches = xliffDocument.TranslationUnits.Batch((int)bucketSize);
         var src = input.SourceLanguage ?? xliffDocument.SourceLanguage;
@@ -456,10 +456,10 @@ public class GeminiXliffActions : VertexAiInvocable
             Model = endpoint,
             GenerationConfig = new GenerationConfig
             {
-                Temperature = input.Temperature ?? (modelId == ModelIds.GeminiPro ? 0.9f : 0.4f),
+                Temperature = input.Temperature ?? 0.9f ,
                 TopP = input.TopP ?? 1.0f,
-                TopK = input.TopK ?? (modelId == ModelIds.GeminiPro ? 3 : 32),
-                MaxOutputTokens = input.MaxOutputTokens ?? (modelId == ModelIds.GeminiPro ? 8192 : 2048)
+                TopK = input.TopK ?? 3,
+                MaxOutputTokens = input.MaxOutputTokens ?? 8192
             },
             SafetySettings = { safetySettings },
             SystemInstruction = systemPrompt is null
