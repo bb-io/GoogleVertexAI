@@ -5,14 +5,16 @@ namespace Apps.GoogleVertexAI.DataSourceHandlers
 {
     public class AIModelWithFileDataSourceHandler : IStaticDataSourceItemHandler
     {
+        Dictionary<string,string> Data = new Dictionary<string, string> {
+                { "gemini-2.0-flash-001","Gemini 2.0 Flash" } ,
+                {"gemini-2.0-flash-lite","Gemini 2.0 Flash-Lite" },
+                {"gemini-1.5-flash-002","Gemini 1.5 Flash"},
+                {"gemini-1.0-pro-vision-001","Gemini 1.0 Pro Vision"}
+            };
+
         public IEnumerable<DataSourceItem> GetData()
         {
-            return new List<DataSourceItem> {
-                new DataSourceItem("gemini-2.0-flash-001","Gemini 2.0 Flash") ,
-                new DataSourceItem("gemini-2.0-flash-lite","Gemini 2.0 Flash-Lite") ,
-                new DataSourceItem("gemini-1.5-flash-002","Gemini 1.5 Flash"),
-                new DataSourceItem("gemini-1.0-pro-vision-001","Gemini 1.0 Pro Vision")
-            };
+            return Data.Select(x => new DataSourceItem(x.Key, x.Value));
         }
     }
 }

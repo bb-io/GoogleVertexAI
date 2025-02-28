@@ -5,20 +5,22 @@ namespace Apps.GoogleVertexAI.DataSourceHandlers.Static;
 
 public class XliffStateDataSourceHandler : IStaticDataSourceItemHandler
 {
+    private static Dictionary<string,string> Data = new Dictionary<string, string>
+        {
+            {"final", "Final" },
+            {"needs-adaptation", "Needs adaptation" },
+            {"needs-l10n", "Needs l10n" },
+            {"needs-review-adaptation", "Needs review adaptation" },
+            {"needs-review-l10n", "Needs review l10n" },
+            {"needs-review-translation", "Needs review translation" },
+            {"needs-translation", "Needs translation" },
+            {"new", "New" },
+            {"signed-off", "Signed off" },
+            {"translated", "Translated" },
+        };
+
     public IEnumerable<DataSourceItem> GetData()
     {
-        return new List<DataSourceItem>
-        {
-            new DataSourceItem("final", "Final" ),
-            new DataSourceItem("needs-adaptation", "Needs adaptation" ),
-            new DataSourceItem("needs-l10n", "Needs l10n" ),
-            new DataSourceItem("needs-review-adaptation", "Needs review adaptation" ),
-            new DataSourceItem("needs-review-l10n", "Needs review l10n" ),
-            new DataSourceItem("needs-review-translation", "Needs review translation" ),
-            new DataSourceItem("needs-translation", "Needs translation" ),
-            new DataSourceItem("new", "New" ),
-            new DataSourceItem("signed-off", "Signed off" ),
-            new DataSourceItem("translated", "Translated" ),
-        };
+        return Data.Select(x => new DataSourceItem(x.Key, x.Value));
     }
 }
