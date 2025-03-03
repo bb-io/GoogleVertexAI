@@ -1,23 +1,26 @@
 using Blackbird.Applications.Sdk.Common.Dictionaries;
+using Blackbird.Applications.Sdk.Common.Dynamic;
 
 namespace Apps.GoogleVertexAI.DataSourceHandlers.Static;
 
-public class XliffStateDataSourceHandler : IStaticDataSourceHandler
+public class XliffStateDataSourceHandler : IStaticDataSourceItemHandler
 {
-    public Dictionary<string, string> GetData()
-    {
-        return new Dictionary<string, string>
+    private static Dictionary<string,string> Data = new Dictionary<string, string>
         {
-            { "final", "Final" },
-            { "needs-adaptation", "Needs adaptation" },
-            { "needs-l10n", "Needs l10n" },
-            { "needs-review-adaptation", "Needs review adaptation" },
-            { "needs-review-l10n", "Needs review l10n" },
-            { "needs-review-translation", "Needs review translation" },
-            { "needs-translation", "Needs translation" },
-            { "new", "New" },
-            { "signed-off", "Signed off" },
-            { "translated", "Translated" },
+            {"final", "Final" },
+            {"needs-adaptation", "Needs adaptation" },
+            {"needs-l10n", "Needs l10n" },
+            {"needs-review-adaptation", "Needs review adaptation" },
+            {"needs-review-l10n", "Needs review l10n" },
+            {"needs-review-translation", "Needs review translation" },
+            {"needs-translation", "Needs translation" },
+            {"new", "New" },
+            {"signed-off", "Signed off" },
+            {"translated", "Translated" },
         };
+
+    public IEnumerable<DataSourceItem> GetData()
+    {
+        return Data.Select(x => new DataSourceItem(x.Key, x.Value));
     }
 }

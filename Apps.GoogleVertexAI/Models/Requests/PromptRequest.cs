@@ -51,6 +51,6 @@ public class PromptRequest
     public IEnumerable<string>? SafetyCategoryThresholds { get; set; }
     
     [Display("Model endpoint")]
-    [StaticDataSource(typeof(GeminiModelDataSourceHandler))]
+    [StaticDataSource(typeof(AIModelDataSourceHandler))]
     public string? ModelEndpoint { get; set; }
 }
