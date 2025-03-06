@@ -6,7 +6,7 @@ namespace Apps.GoogleVertexAI.DataSourceHandlers.Static
     public class AIModelDataSourceHandler : IStaticDataSourceItemHandler
     {
         private static Dictionary<string, string> Data = new Dictionary<string, string> {
-                { "gemini-1.5-pro-002","Gemini 1.5 Pro" } ,
+                {"gemini-1.5-pro","Gemini 1.5 Pro" } ,
                 {"gemini-1.0-pro","Gemini 1.0 Pro" }
             };
         public IEnumerable<DataSourceItem> GetData()
