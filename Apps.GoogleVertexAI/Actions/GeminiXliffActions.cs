@@ -221,6 +221,8 @@ public class GeminiXliffActions : VertexAiInvocable
                  "Specify the number of translation units to be processed at once. Default value: 1500. (See our documentation for an explanation)")]
         int? bucketSize = 1500)
     {
+        if (input?.File == null)
+            throw new PluginMisconfigurationException("The input file is empty. Please check your input and try again");
         var xliffDocument = await DownloadXliffDocumentAsync(input.File);
 
         var model = promptRequest.ModelEndpoint ?? input.AIModel;
@@ -501,6 +503,10 @@ public class GeminiXliffActions : VertexAiInvocable
     protected async Task<XliffDocument> DownloadXliffDocumentAsync(FileReference file)
     {
         var fileStream = await _fileManagementClient.DownloadAsync(file);
+
+        if (fileStream == null)
+            throw new PluginMisconfigurationException("Error uploading XLIFF file. Please check you input and try again");
+
         var xliffMemoryStream = new MemoryStream();
         await fileStream.CopyToAsync(xliffMemoryStream);
         xliffMemoryStream.Position = 0;
@@ -508,7 +514,7 @@ public class GeminiXliffActions : VertexAiInvocable
         var xliffDocument = xliffMemoryStream.ToXliffDocument();
         if (xliffDocument.TranslationUnits.Count == 0)
         {
-            throw new PluginApplicationException("The XLIFF file does not contain any translation units.");
+            throw new PluginMisconfigurationException("The XLIFF file does not contain any translation units.");
         }
 
         return xliffDocument;
