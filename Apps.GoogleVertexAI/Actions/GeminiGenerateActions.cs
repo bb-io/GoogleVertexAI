@@ -84,6 +84,7 @@ public class GeminiGenerateActions : VertexAiInvocable
             throw new PluginApplicationException(exception.Message);
         }
     }
+
     [Action("Generate text from file with Gemini", Description = $"Generate text using Gemini. " +
                                                    "Generation will be performed with the chosen" +
                                                    " model.")]
