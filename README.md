@@ -1,4 +1,4 @@
-# Blackbird.io Google Vertex AI
+# Blackbird.io Google Gemini AI
 
 Blackbird is the new automation backbone for the language technology industry. Blackbird provides enterprise-scale automation and orchestration with a simple no-code/low-code platform. Blackbird enables ambitious organizations to identify, vet and automate as many processes as possible. Not just localization workflows, but any business and IT process. This repository represents an application that is deployable on Blackbird and usable inside the workflow editor.
 
@@ -6,7 +6,7 @@ Blackbird is the new automation backbone for the language technology industry. B
 
 <!-- begin docs -->
 
-Vertex AI is a comprehensive platform offering access to powerful multimodal models like Gemini from Google, enabling developers to seamlessly combine various inputs such as text, images, video, or code. With a diverse selection of models, Vertex AI facilitates easy customization and integration, allowing for the development and deployment of AI applications. The platform provides generative AI models, fully managed tools, and purpose-built MLOps solutions to streamline the entire machine learning lifecycle—from training and tuning to deployment and monitoring.
+Google Gemini AI is a comprehensive platform offering access to powerful multimodal models like Gemini from Google, enabling developers to seamlessly combine various inputs such as text, images, video, or code. With a diverse selection of models, Vertex AI facilitates easy customization and integration, allowing for the development and deployment of AI applications. The platform provides generative AI models, fully managed tools, and purpose-built MLOps solutions to streamline the entire machine learning lifecycle—from training and tuning to deployment and monitoring.
 
 ## Before setting up
 
