@@ -10,7 +10,6 @@ namespace Apps.GoogleVertexAI.DataSourceHandlers.Static
                 {"gemini-2.5-flash-preview-04-17","Gemini 2.5 Flash Preview 04-17" },
                 {"gemini-2.5-pro-exp-03-25","Gemini 2.5 Pro Experimental 03-25" },
                 {"gemini-2.5-pro-preview-03-25","Gemini 2.5 Pro Preview 03-25" },
-
                 {"gemini-2.0-flash","Gemini 2.0 Flash" },
                 {"gemini-2.0-flash-lite","Gemini 2.0 Flash-Lite" },
                 {"gemini-2.0-pro-exp-02-05", " Gemini 2.0 Pro Experimental 02-05" },
