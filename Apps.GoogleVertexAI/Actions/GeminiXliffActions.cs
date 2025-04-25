@@ -113,7 +113,7 @@ public class GeminiXliffActions : VertexAiInvocable
             }
 
             var systemPrompt =
-                "You are a linguistic expert that should process the following texts accoring to the given instructions. Include in your response the ID of the sentence and the score number as a comma separated array of tuples without any additional information (it is crucial because your response will be deserialized programmatically).";
+                "You are a linguistic expert that should process the following texts according to the given instructions. Include in your response the ID of the sentence and the score number as a comma separated array of tuples without any additional information (it is crucial because your response will be deserialized programmatically).";
             var (result, promptUsage) = await ExecuteGeminiPrompt(promptRequest, model, userPrompt, systemPrompt);
 
             usage += promptUsage;
