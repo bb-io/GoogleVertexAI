@@ -41,8 +41,12 @@ public class GeminiGenerateActions : VertexAiInvocable
                     })
             : Enumerable.Empty<SafetySetting>();
 
+        var region = InvocationContext.AuthenticationCredentialsProviders
+        .First(p => p.KeyName == CredNames.Region)
+        .Value;
+
         var endpoint = input.ModelEndpoint ?? EndpointName
-            .FromProjectLocationPublisherModel(ProjectId, Urls.Location, PublisherIds.Google, input.AIModel)
+            .FromProjectLocationPublisherModel(ProjectId, region, PublisherIds.Google, input.AIModel)
             .ToString();
 
         var content = new Content
