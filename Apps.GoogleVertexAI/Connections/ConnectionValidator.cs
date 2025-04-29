@@ -26,13 +26,14 @@ public class ConnectionValidator : IConnectionValidator
 
             var region = authenticationCredentialsProviders.Get(CredNames.Region).Value;
 
-            var apiUrl = $"https://{region}-aiplatform.googleapis.com";
+            var apiUrl = region.Equals("global", StringComparison.OrdinalIgnoreCase)? "https://aiplatform.googleapis.com"
+                : $"https://{region}-aiplatform.googleapis.com";
             var client = new EndpointServiceClientBuilder { JsonCredentials = svc, Endpoint = apiUrl }.Build();
 
-            var list = client.ListEndpointsAsync($"projects/{projectId}/locations/{region}");
-            await foreach (var ep in list)
+            await foreach (var ep in client.ListEndpointsAsync(
+                $"projects/{projectId}/locations/{region}"))
             {
-
+                break;
             }
             return new ConnectionValidationResponse { IsValid = true };
 
