@@ -27,7 +27,8 @@ namespace GoogleVertexAI.Base
 
                 Creds = new List<AuthenticationCredentialsProvider>
         {
-            new(AuthenticationCredentialsRequestLocation.None, CredNames.ServiceAccountConfString, serviceAccountJson)
+            new(AuthenticationCredentialsRequestLocation.None, CredNames.ServiceAccountConfString, serviceAccountJson),
+            new(AuthenticationCredentialsRequestLocation.None, CredNames.Region, config.GetSection("ConnectionDefinition:Region").Value)
         };
             }
             else

@@ -26,7 +26,7 @@ namespace Tests.GoogleVertexAI
             var action = new GeminiGenerateActions(InvocationContext, FileManager);
 
             var response = await action.GenerateTextFromFile(
-                new GenerateTextFromFileRequest { AIModel = "gemini-2.0-flash",
+                new GenerateTextFromFileRequest { AIModel = "gemini-2.5-pro-exp-03-25",
                 File= new FileReference {Name= "test.xliff", ContentType = MediaTypeNames.Text.Xml },
                 Prompt="what is that file about"});
 

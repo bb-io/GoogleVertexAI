@@ -19,27 +19,31 @@ public class ConnectionValidator : IConnectionValidator
     {
         try
         {
+            var svc = authenticationCredentialsProviders.Get(CredNames.ServiceAccountConfString).Value;
             var serviceConfig = JsonConvert.DeserializeObject<ServiceAccountConfig>(authenticationCredentialsProviders.Get(CredNames.ServiceAccountConfString).Value);
             if (serviceConfig == null) throw new PluginApplicationException("The service config string was not properly formatted");
             var projectId = serviceConfig.ProjectId;
 
-            var endpointService = new EndpointServiceClientBuilder()
-            {
-                JsonCredentials = authenticationCredentialsProviders.Get(CredNames.ServiceAccountConfString).Value,
-                Endpoint = Urls.ApiUrl
-            }.Build();
+            var region = authenticationCredentialsProviders.Get(CredNames.Region).Value;
 
-            var res = endpointService.ListEndpointsAsync($"projects/{projectId}/locations/{Urls.Location}");
-            var result = new List<Endpoint>();
-            await foreach (var endpoint in res)
+            var isUnprefixed = region.Equals("global", StringComparison.OrdinalIgnoreCase)
+                            || region.Equals("us-central1", StringComparison.OrdinalIgnoreCase);
+
+            var apiUrl = isUnprefixed
+                ? "https://aiplatform.googleapis.com"
+                : $"https://{region}-aiplatform.googleapis.com";
+
+            var client = new EndpointServiceClientBuilder { JsonCredentials = svc, Endpoint = apiUrl }.Build();
+
+            if (!isUnprefixed)
             {
-                result.Add(endpoint);
+                await foreach (var ep in client.ListEndpointsAsync(
+                    $"projects/{projectId}/locations/{region}"))
+                {
+                    break;
+                }
             }
-
-            return new()
-            {
-                IsValid = true
-            };
+            return new ConnectionValidationResponse { IsValid = true };
         }
         catch (Exception ex)
         {

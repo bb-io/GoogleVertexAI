@@ -36,12 +36,11 @@ Before you can connect you need to make sure that:
 2. Click _Add Connection_.
 3. Name your connection for future reference e.g. 'My organization'.
 4. Fill in the JSON configuration string obtained in the previous step.
-5. Click _Connect_.
-6. Confirm that the connection has appeared and the status is _Connected_.
+5. Choose the necessary region.
+6. Click _Connect_.
+7. Confirm that the connection has appeared and the status is _Connected_.
 
 ![Connecting](image/README/connecting.png)
-
-> Note: Currently the app works for models stored in the location *us-west1*. If you have other requirements please let us know!
 
 ## Actions
 
@@ -72,6 +71,7 @@ Before you can connect you need to make sure that:
 - **Process XLIFF file** given an XLIFF file, processes each translation unit according to provided instructions (default is to translate source tags) and updates the target text for each unit.
 
 Note, that all XLIFF actions supports 1.2 and 2.1 versions of the XLIFF format, since these versions are the most commonly used in the industry. If you have a different version, please let us know and we will consider adding support for it.
+At the current moment models "gemini-2.5-pro-preview-03-25" supports global and us-central1 regions, "gemini-2.5-flash-preview-04-17" supports us-central1 region.
 
 ### Bucket size, performance and cost
 
