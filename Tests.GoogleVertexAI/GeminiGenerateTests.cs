@@ -14,7 +14,7 @@ namespace Tests.GoogleVertexAI
         {
             var action = new GeminiGenerateActions(InvocationContext, FileManager);
 
-            var response = await action.GenerateText(new GenerateTextRequest { AIModel = "gemini-2.5-pro-preview-03-25", Prompt = "Explain what is sun?" });
+            var response = await action.GenerateText(new GenerateTextRequest { AIModel = "gemini-2.0-flash-lite", Prompt = "Explain what is sun?" });
 
             Console.WriteLine(response.GeneratedText);
             Assert.IsNotNull(response);
