@@ -26,34 +26,24 @@ public class ConnectionValidator : IConnectionValidator
 
             var region = authenticationCredentialsProviders.Get(CredNames.Region).Value;
 
-            var apiUrl = region.Equals("global", StringComparison.OrdinalIgnoreCase)? "https://aiplatform.googleapis.com"
+            var isUnprefixed = region.Equals("global", StringComparison.OrdinalIgnoreCase)
+                            || region.Equals("us-central1", StringComparison.OrdinalIgnoreCase);
+
+            var apiUrl = isUnprefixed
+                ? "https://aiplatform.googleapis.com"
                 : $"https://{region}-aiplatform.googleapis.com";
+
             var client = new EndpointServiceClientBuilder { JsonCredentials = svc, Endpoint = apiUrl }.Build();
 
-            await foreach (var ep in client.ListEndpointsAsync(
-                $"projects/{projectId}/locations/{region}"))
+            if (!isUnprefixed)
             {
-                break;
+                await foreach (var ep in client.ListEndpointsAsync(
+                    $"projects/{projectId}/locations/{region}"))
+                {
+                    break;
+                }
             }
             return new ConnectionValidationResponse { IsValid = true };
-
-            //var endpointService = new EndpointServiceClientBuilder()
-            //{
-            //    JsonCredentials = authenticationCredentialsProviders.Get(CredNames.ServiceAccountConfString).Value,
-            //    Endpoint = Urls.ApiUrl
-            //}.Build();
-
-            //var res = endpointService.ListEndpointsAsync($"projects/{projectId}/locations/{Urls.Location}");
-            //var result = new List<Endpoint>();
-            //await foreach (var endpoint in res)
-            //{
-            //    result.Add(endpoint);
-            //}
-
-            //return new()
-            //{
-            //    IsValid = true
-            //};
         }
         catch (Exception ex)
         {
