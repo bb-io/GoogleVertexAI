@@ -19,6 +19,7 @@ public class ConnectionDefinition : IConnectionDefinition
                 new(CredNames.ServiceAccountConfString) { DisplayName = "Service account configuration string" },
                 new(CredNames.Region) { DisplayName = "Region" , DataItems= new ConnectionPropertyValue[]{
 
+                            new("global",              "Global endpoint (global)"),
                             new("africa-south1",       "Johannesburg, South Africa, Africa (africa-south1)"),
                             new("asia-east1",          "Changhua County, Taiwan, Asia Pacific (asia-east1)"),
                             new("asia-east2",          "Hong Kong, Asia Pacific (asia-east2)"),
