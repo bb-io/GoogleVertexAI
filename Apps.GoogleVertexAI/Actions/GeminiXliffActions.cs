@@ -433,7 +433,7 @@ public class GeminiXliffActions : VertexAiInvocable
         string? systemPrompt = null)
     {
         var endpoint = EndpointName
-            .FromProjectLocationPublisherModel(ProjectId, Urls.Location, PublisherIds.Google, modelId)
+            .FromProjectLocationPublisherModel(ProjectId, Region, PublisherIds.Google, modelId)
             .ToString();
 
         var content = new Content

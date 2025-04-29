@@ -119,7 +119,7 @@ public class GeminiGenerateActions : VertexAiInvocable
             : Enumerable.Empty<SafetySetting>();
 
         var endpoint = input.ModelEndpoint ?? EndpointName
-            .FromProjectLocationPublisherModel(ProjectId, Urls.Location, PublisherIds.Google, input.AIModel)
+            .FromProjectLocationPublisherModel(ProjectId, Region, PublisherIds.Google, input.AIModel)
             .ToString();
 
 

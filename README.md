@@ -36,8 +36,9 @@ Before you can connect you need to make sure that:
 2. Click _Add Connection_.
 3. Name your connection for future reference e.g. 'My organization'.
 4. Fill in the JSON configuration string obtained in the previous step.
-5. Click _Connect_.
-6. Confirm that the connection has appeared and the status is _Connected_.
+5. Choose the necessary region.
+6. Click _Connect_.
+7. Confirm that the connection has appeared and the status is _Connected_.
 
 ![Connecting](image/README/connecting.png)
 
