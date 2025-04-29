@@ -14,13 +14,15 @@ public class VertexAiInvocable : BaseInvocable
 {
     protected readonly PredictionServiceClient Client;
     protected readonly string ProjectId;
+    protected readonly string Region;
 
     protected AuthenticationCredentialsProvider[] Creds =>
         InvocationContext.AuthenticationCredentialsProviders.ToArray();
 
     protected VertexAiInvocable(InvocationContext invocationContext) : base(invocationContext)
     {
-        Client = ClientFactory.Create(invocationContext.AuthenticationCredentialsProviders);
+        Region = invocationContext.AuthenticationCredentialsProviders.Get(CredNames.Region).Value;
+        Client = ClientFactory.Create(invocationContext.AuthenticationCredentialsProviders,Region);
         var serviceConfig = JsonConvert.DeserializeObject<ServiceAccountConfig>(invocationContext.AuthenticationCredentialsProviders.Get(CredNames.ServiceAccountConfString).Value);
         if (serviceConfig == null) throw new Exception("The service config string was not properly formatted");
         ProjectId = serviceConfig.ProjectId;
