@@ -25,7 +25,7 @@ public class ScoreXliffRequest
     [StaticDataSource(typeof(XliffStateDataSourceHandler))]
     public string? State { get; set; }
 
-    [StaticDataSource(typeof(AIModelDataSourceHandler))]
+    [DataSource(typeof(AIModelDataSourceHandler))]
     [Display("AI model used")]
     public required string AIModel { get; set; }
 }

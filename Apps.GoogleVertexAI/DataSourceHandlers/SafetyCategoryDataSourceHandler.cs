@@ -1,14 +1,20 @@
-﻿using Blackbird.Applications.Sdk.Utils.Sdk.DataSourceHandlers;
+﻿using Blackbird.Applications.Sdk.Common.Dictionaries;
+using Blackbird.Applications.Sdk.Common.Dynamic;
 
 namespace Apps.GoogleVertexAI.DataSourceHandlers;
 
-public class SafetyCategoryDataSourceHandler : EnumDataHandler
+public class SafetyCategoryDataSourceHandler : IStaticDataSourceItemHandler
 {
-    protected override Dictionary<string, string> EnumValues => new()
+    private static Dictionary<string, string> EnumValues => new()
     {
         { "SexuallyExplicit", "Sexually explicit" },
         { "HateSpeech", "Hate speech" },
         { "Harassment", "Harassment" },
         { "DangerousContent", "Dangerous content" }
     };
+
+    public IEnumerable<DataSourceItem> GetData()
+    {
+        return EnumValues.Select(x => new DataSourceItem(x.Key, x.Value));
+    }
 }
