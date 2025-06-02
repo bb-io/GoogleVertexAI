@@ -40,14 +40,14 @@ public class PromptRequest
     [Display("Safety categories", Description = "The safety categories to configure thresholds for. For each " +
                                                 "specified category, a respective threshold should be added in " +
                                                 "the 'Thresholds for safety categories' input parameter.")]
-    [DataSource(typeof(SafetyCategoryDataSourceHandler))]
+    [StaticDataSource(typeof(SafetyCategoryDataSourceHandler))]
     public IEnumerable<string>? SafetyCategories { get; set; }
 
     [Display("Thresholds for safety categories", Description = "The thresholds to configure for safety " +
                                                                "categories. For each specified threshold, " +
                                                                "a respective category should be added in " +
                                                                "the 'Safety categories' input parameter.")]
-    [DataSource(typeof(SafetyCategoryThresholdDataSourceHandler))]
+    [StaticDataSource(typeof(SafetyCategoryThresholdDataSourceHandler))]
     public IEnumerable<string>? SafetyCategoryThresholds { get; set; }
     
     [Display("Model endpoint")]
