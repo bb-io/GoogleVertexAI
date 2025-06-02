@@ -1,6 +1,5 @@
 using Apps.GoogleVertexAI.DataSourceHandlers.Static;
 using Blackbird.Applications.Sdk.Common;
-using Blackbird.Applications.Sdk.Common.Dictionaries;
 using Blackbird.Applications.Sdk.Common.Dynamic;
 using Blackbird.Applications.Sdk.Common.Files;
 
@@ -17,7 +16,7 @@ public class PostEditXliffRequest
     [Display("Target language")]
     public string? TargetLanguage { get; set; }
 
-    [StaticDataSource(typeof(AIModelDataSourceHandler))]
+    [DataSource(typeof(AIModelDataSourceHandler))]
     [Display("AI model used")]
     public required string AIModel { get; set; }
 }
