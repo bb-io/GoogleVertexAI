@@ -1,9 +1,6 @@
-﻿using Apps.GoogleVertexAI.DataSourceHandlers.FloatParameterHandlers;
-using Apps.GoogleVertexAI.DataSourceHandlers.Static;
+﻿using Apps.GoogleVertexAI.DataSourceHandlers.Static;
 using Blackbird.Applications.Sdk.Common;
 using Blackbird.Applications.Sdk.Common.Dictionaries;
-using Blackbird.Applications.Sdk.Common.Dynamic;
-using Blackbird.Applications.Sdk.Common.Files;
 
 namespace Apps.GoogleVertexAI.Models.Requests;
 
