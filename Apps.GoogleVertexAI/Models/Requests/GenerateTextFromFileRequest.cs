@@ -19,7 +19,7 @@ public class GenerateTextFromFileRequest : PromptRequest
                                     "MPEGPS, FLV, with a size limit of 20 MB.")]
     public FileReference File { get; set; }
 
-    [StaticDataSource(typeof(AIModelWithFileDataSourceHandler))]
+    [DataSource(typeof(AIModelWithFileDataSourceHandler))]
     [Display("AI model used")]
     public required string AIModel { get; set; }
 
