@@ -378,28 +378,30 @@ public class GeminiXliffActions : VertexAiInvocable
             }
 
             var (response, promptUsage) = await ExecuteGeminiPrompt(promptRequest, model, userPrompt, systemPrompt);
-
             usageDto += promptUsage;
             var translatedText = response.Trim()
-                .Replace("```", string.Empty).Replace("json", string.Empty);
+                .Replace("```", string.Empty)
+                .Replace("json", string.Empty);
 
             try
             {
-                var result = JsonConvert.DeserializeObject<string[]>(translatedText.Substring(translatedText.IndexOf("[")));
-
-                if (result.Length != batch.Count())
+                string cleanedText = translatedText.Trim();
+                int startIndex = cleanedText.IndexOf("[");
+                if (startIndex < 0)
                 {
-                    throw new PluginApplicationException(
-                        "Server returned inappropriate response. " +
-                        "The number of translated texts does not match the number of source texts. " +
-                        "Probably there is a duplication or a missing text in translation unit. " +
-                        "Try change model or bucket size (to lower values) or add retries to this action.");
+                    throw new PluginApplicationException("Invalid response format: JSON array not found in response.");
                 }
 
-                results.AddRange(result);
+                string jsonContent = cleanedText.Substring(startIndex);
+                var result = JsonConvert.DeserializeObject<string[]>(jsonContent);
+                if (result != null)
+                {
+                    results.AddRange(result);
+                }
             }
             catch (JsonReaderException jsonEx)
             {
+                InvocationContext.Logger?.LogError($"[GoogleGemini] JSON parsing error: {jsonEx.Message}; Translated text: {translatedText}", []);
                 throw new PluginApplicationException(
                     "We encountered an issue while processing the response from the server. " +
                     "It looks like the data format is incorrect, making it unreadable. " +
@@ -412,7 +414,23 @@ public class GeminiXliffActions : VertexAiInvocable
             }
         }
 
-        return (results.ToDictionary(x => Regex.Match(x, "\\{ID:(.*?)\\}(.+)$").Groups[1].Value, y => Regex.Match(y, "\\{ID:(.*?)\\}(.+)$").Groups[2].Value), usageDto);
+        var dict = new Dictionary<string, string>();
+        foreach (var item in results)
+        {
+            var match = Regex.Match(item, "\\{ID:(.*?)\\}(.+)$");
+            if (match.Success && !string.IsNullOrEmpty(match.Groups[1].Value))
+            {
+                var id = match.Groups[1].Value;
+                var content = match.Groups[2].Value;
+
+                if (!dict.ContainsKey(id))
+                {
+                    dict[id] = content;
+                }
+            }
+        }
+
+        return (dict, usageDto);
     }
 
     string GetUserPrompt(string prompt, XliffDocument xliffDocument, string json)
@@ -458,7 +476,7 @@ public class GeminiXliffActions : VertexAiInvocable
             Model = endpoint,
             GenerationConfig = new GenerationConfig
             {
-                Temperature = input.Temperature ?? 0.9f ,
+                Temperature = input.Temperature ?? 0.9f,
                 TopP = input.TopP ?? 1.0f,
                 TopK = input.TopK ?? 3,
                 MaxOutputTokens = input.MaxOutputTokens ?? 8192

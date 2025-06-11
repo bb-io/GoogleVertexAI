@@ -45,15 +45,15 @@ public class GeminiXliffActionsTests : TestBase
         var translationRequest = new TranslateXliffRequest 
         { 
             File = new FileReference { Name = TestFileName }, 
-            AIModel = "gemini-1.5-pro-002" 
+            AIModel = ModelName
         };
         
-        var customPrompt = "YOUR_PROMPT";
+        var customPrompt = "You are a human translator native in the target language identified in the file. Translate the text from the source language identified in the file to the target language identified in the file. Ensure that any tags included in the source language are replicated in the target language. Ensure the output is provided in valid XML/XLIFF format, similar to the input file format.";
         var modelRequest = new PromptRequest { ModelEndpoint = ModelName };
         var glossaryRequest = new GlossaryRequest();
         
         // Act
-        var result = await action.TranslateXliff(translationRequest, modelRequest, customPrompt, glossaryRequest);
+        var result = await action.TranslateXliff(translationRequest, modelRequest, customPrompt, glossaryRequest, bucketSize: 8);
         
         // Assert
         Assert.IsNotNull(result);
