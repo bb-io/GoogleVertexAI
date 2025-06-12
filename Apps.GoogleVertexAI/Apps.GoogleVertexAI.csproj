@@ -6,7 +6,7 @@
         <Nullable>enable</Nullable>
         <Product>Google Gemini AI</Product>
         <Description>Powerful and unified machine learning platform offered by Google Cloud</Description>
-        <Version>1.2.7</Version>
+        <Version>1.2.8</Version>
         <AssemblyName>Apps.GoogleVertexAI</AssemblyName>
     </PropertyGroup>
 
