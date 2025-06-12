@@ -97,8 +97,6 @@ public static class GeminiResponseParser
     {
         try
         {
-            logger?.LogDebug($"[GoogleGemini] Raw response: {response}", []);
-            
             // First handle code blocks with triple backticks
             string jsonContent = response.Trim();
             if (jsonContent.Contains("```"))
@@ -128,7 +126,6 @@ public static class GeminiResponseParser
                 }
                 else
                 {
-                    logger?.LogWarning("[GoogleGemini] No JSON array found in response", []);
                     return new List<XliffIssueDto>();
                 }
             }
@@ -138,23 +135,16 @@ public static class GeminiResponseParser
             {
                 jsonContent = jsonContent.Substring(0, endIndex + 1);
             }
-            
-            logger?.LogDebug($"[GoogleGemini] Extracted JSON content: {jsonContent}", []);
-            
-            // Now try to parse the JSON
+                        
             var issues = JsonConvert.DeserializeObject<List<Dictionary<string, string>>>(jsonContent);
-            
             if (issues == null || !issues.Any())
             {
-                logger?.LogWarning("[GoogleGemini] Deserialized to null or empty list", []);
                 return new List<XliffIssueDto>();
             }
             
-            // Convert to XliffIssueDto objects
             var result = new List<XliffIssueDto>();
             foreach (var issue in issues)
             {
-                // Check for both "id" (from response) and "translation_unit_id" (legacy format)
                 string? id = null;
                 if (issue.TryGetValue("id", out var directId))
                 {
@@ -173,13 +163,8 @@ public static class GeminiResponseParser
                         Issues = issueText
                     });
                 }
-                else
-                {
-                    logger?.LogWarning($"[GoogleGemini] Found incomplete issue object: {JsonConvert.SerializeObject(issue)}", []);
-                }
             }
             
-            logger?.LogDebug($"[GoogleGemini] Successfully parsed {result.Count} issues", []);
             return result;
         }
         catch (JsonReaderException ex)
