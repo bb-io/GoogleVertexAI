@@ -308,10 +308,9 @@ public class GeminiXliffActions : VertexAiInvocable
             $"You are receiving multiple source texts written in {sourceLanguage} " +
             $"that were translated into target texts written in {targetLanguage}. " +
             "Thoroughly analyze ALL translation units provided in the batch. " +
-            "For EACH translation unit (identified by its ID), evaluate the target text for grammatical errors, " +
+            "For translation unit (identified by its ID), evaluate the target text for grammatical errors, " +
             "language structure issues, and overall linguistic coherence. " +
             "Include the ID with each issue you identify. " +
-            "Do not skip any translation units - it's critical to evaluate all units in the batch. " +
             $"{(input.TargetAudience != null ? $"The target audience is {input.TargetAudience}" : string.Empty)}";
 
         if (glossary.Glossary != null)
