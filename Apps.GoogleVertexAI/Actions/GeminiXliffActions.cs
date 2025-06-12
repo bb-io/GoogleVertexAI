@@ -281,6 +281,86 @@ public class GeminiXliffActions : VertexAiInvocable
         return new TranslateXliffResponse { File = finalFile, Usage = usage, };
     }
 
+    [Action("Get translation issues from XLIFF file", Description = "Analyzes an XLIFF file to identify translation issues between source and target texts")]
+    public async Task<GetTranslationIssuesResponse> GetTranslationIssues(
+        [ActionParameter] GetTranslationIssuesRequest input,
+        [ActionParameter] GlossaryRequest glossary,
+        [ActionParameter] PromptRequest promptRequest,
+        [ActionParameter, Display("Prompt", Description = "Custom prompt to override the default analysis instructions")] string? prompt = null,
+        [ActionParameter, Display("Bucket size", Description = "Specify the number of translation units to be processed at once. Default value: 1500. (See our documentation for an explanation)")] int? bucketSize = 1500)
+    {
+        var xliffDocument = await DownloadXliffDocumentAsync(input.File);
+        var model = promptRequest.ModelEndpoint ?? input.AIModel;
+        var unitsToProcess = FilterTranslationUnits(xliffDocument.TranslationUnits, input.PostEditLockedSegments ?? false, input.ProcessOnlyTargetState);
+        
+        if (!unitsToProcess.Any())
+        {
+            throw new PluginMisconfigurationException("No translation units match the specified criteria.");
+        }
+
+        var sourceLanguage = input.SourceLanguage ?? xliffDocument.SourceLanguage;
+        var targetLanguage = input.TargetLanguage ?? xliffDocument.TargetLanguage;        var realBucketSize = bucketSize ?? 1500;
+        var batches = unitsToProcess.Batch((int)realBucketSize);
+        var usage = new UsageDto();
+        var allIssues = new StringBuilder();
+        
+        var systemPrompt = prompt ?? 
+            $"You are receiving a source text written in {sourceLanguage} " +
+            $"that was translated into target text written in {targetLanguage}. " +
+            "Evaluate the target text for grammatical errors, language structure issues, and overall linguistic coherence, " +
+            "including them in the issues description. Respond with the issues description. " +
+            $"{(input.TargetAudience != null ? $"The target audience is {input.TargetAudience}" : string.Empty)}";
+
+        if (glossary.Glossary != null)
+        {
+            systemPrompt +=
+                " Ensure that the translation aligns with the glossary entries provided for the respective " +
+                "languages, and note any discrepancies, ambiguities, or incorrect usage of terms. Include " +
+                "these observations in the issues description.";
+        }
+
+        foreach (var batch in batches)
+        {
+            var userPrompt = new StringBuilder();
+            userPrompt.AppendLine($"Please analyze the following translations from {sourceLanguage} to {targetLanguage}:");
+            
+            foreach (var unit in batch)
+            {
+                userPrompt.AppendLine($"ID: {unit.Id}");
+                userPrompt.AppendLine($"Source: {unit.Source}");
+                userPrompt.AppendLine($"Target: {unit.Target}");
+                userPrompt.AppendLine();
+            }
+
+            if (glossary.Glossary != null)
+            {
+                var glossaryPromptPart = await GetGlossaryPromptPart(glossary.Glossary, string.Join(';', batch.Select(x => x.Source)));
+                if (!string.IsNullOrEmpty(glossaryPromptPart))
+                {
+                    userPrompt.AppendLine(glossaryPromptPart);
+                }
+            }
+
+            var (issues, promptUsage) = await ExecuteGeminiPrompt(promptRequest, model, userPrompt.ToString(), systemPrompt);
+            usage += promptUsage;
+            
+            if (allIssues.Length > 0)
+            {
+                allIssues.AppendLine();
+                allIssues.AppendLine("---");
+                allIssues.AppendLine();
+            }
+            
+            allIssues.Append(issues);
+        }
+
+        return new GetTranslationIssuesResponse
+        {
+            Issues = allIssues.ToString(),
+            Usage = usage
+        };
+    }
+
     private async Task<string?> GetGlossaryPromptPart(FileReference glossary, string sourceContent)
     {
         var glossaryStream = await _fileManagementClient.DownloadAsync(glossary);
@@ -349,6 +429,7 @@ public class GeminiXliffActions : VertexAiInvocable
         var batches = unitsToProcess.Batch(bucketSize);
 
         var usageDto = new UsageDto();
+        var counter = 1;
         foreach (var batch in batches)
         {
             string json = JsonConvert.SerializeObject(batch.Select(x => "{ID:" + x.Id + "}" + x.Source));
@@ -374,18 +455,10 @@ public class GeminiXliffActions : VertexAiInvocable
             try
             {
                 var result = GeminiResponseParser.ParseStringArray(response, InvocationContext.Logger);
-
-                await WebhookLogger.LogAsync(new
-                {
-                    BatchNumber = results.Count / bucketSize + 1,
-                    BatchSize = batch.Length,
-                    result,
-                    ResultCount = result.Results.Length
-                });
                 if (result.IsPartial)
                 {
                     errorMessages.Add(
-                        $"The response from the Gemini API (batch number: {results.Count / bucketSize + 1}) was incomplete. " +
+                        $"The response from the Gemini API (batch number: {counter}) was incomplete. " +
                         $"Got {result.Results.Length} results, but expected {batch.Length}. " +
                         "Try to reduce the batch size.");
                 }
@@ -403,6 +476,10 @@ public class GeminiXliffActions : VertexAiInvocable
                 InvocationContext.Logger?.LogError($"[GoogleGemini] Unexpected error parsing response: {e.Message}; Response: {response}", []);
                 throw new PluginApplicationException(
                     $"An unexpected error occurred while parsing the response. Error: {e.Message}");
+            }
+            finally
+            {
+                counter++;
             }
         }
 
@@ -549,26 +626,12 @@ public class GeminiXliffActions : VertexAiInvocable
         catch (NullReferenceException nullEx)
         {
             InvocationContext.Logger?.LogError($"[GoogleGemini] Null reference error while processing response: {nullEx.Message}", []);
-            await WebhookLogger.LogAsync(new
-            {
-                Error = $"Null reference error: {nullEx.Message}",
-                nullEx.StackTrace,
-                lastMessage
-            });
-
             throw new PluginApplicationException(
                 "An error occurred while processing the response from Gemini API. Some expected data was missing in the response. " +
                 "Please try again or contact support if the issue persists.");
         }
         catch (Exception exception)
         {
-            await WebhookLogger.LogAsync(new
-            {
-                Error = exception.Message,
-                exception.StackTrace,
-                lastMessage
-            });
-
             throw new PluginApplicationException($"Error: {exception.Message}");
         }
     }

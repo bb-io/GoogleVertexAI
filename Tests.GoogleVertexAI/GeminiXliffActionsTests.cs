@@ -35,8 +35,8 @@ public class GeminiXliffActionsTests : TestBase
         Console.WriteLine(result.AverageScore);
         Assert.IsNotNull(result);
         Assert.IsTrue(result.AverageScore >= 0);
-    }
-
+    }   
+    
     [TestMethod]
     public async Task TranslateXliff_WithValidInputs_ReturnsTranslatedDocument()
     {
@@ -60,5 +60,40 @@ public class GeminiXliffActionsTests : TestBase
         Assert.IsNotNull(result);
         Assert.IsNotNull(result.File);
         Console.WriteLine(JsonConvert.SerializeObject(result, Formatting.Indented));
+    }
+    
+    [TestMethod]
+    public async Task GetTranslationIssues_WithValidInputs_ReturnsIssuesAnalysis()
+    {
+        // Arrange
+        var action = new GeminiXliffActions(InvocationContext, FileManager);
+        
+        var issuesRequest = new GetTranslationIssuesRequest
+        {
+            File = new FileReference { Name = TestFileName },
+            AIModel = ModelName,
+            TargetAudience = "General public"
+        };
+        
+        var analysisPrompt = "Analyze the translation quality and identify any grammatical errors, " +
+                           "mistranslations, inconsistencies in terminology, or stylistic issues.";
+        var modelRequest = new PromptRequest { ModelEndpoint = ModelName };
+        var glossaryRequest = new GlossaryRequest();
+        
+        // Act
+        var result = await action.GetTranslationIssues(
+            issuesRequest,
+            glossaryRequest,
+            modelRequest,
+            analysisPrompt,
+            bucketSize: 100);
+        
+        // Assert
+        Assert.IsNotNull(result);
+        Assert.IsNotNull(result.Issues);
+        Assert.IsTrue(result.Issues.Length > 0);
+        Assert.IsNotNull(result.Usage);
+        Console.WriteLine($"Issues analysis length: {result.Issues.Length}");
+        Console.WriteLine(result.Issues);
     }
 }
