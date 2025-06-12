@@ -70,8 +70,16 @@ Before you can connect you need to make sure that:
 
 - **Process XLIFF file** given an XLIFF file, processes each translation unit according to provided instructions (default is to translate source tags) and updates the target text for each unit.
 
+- **Get translation issues from XLIFF file** Analyzes an XLIFF file to identify translation issues between source and target texts
+
 Note, that all XLIFF actions supports 1.2 and 2.1 versions of the XLIFF format, since these versions are the most commonly used in the industry. If you have a different version, please let us know and we will consider adding support for it.
 At the current moment models "gemini-2.5-pro-preview-03-25" supports global and us-central1 regions, "gemini-2.5-flash-preview-04-17" supports us-central1 region.
+
+### Important Notes on XLIFF Processing
+
+> **Performance with Large XLIFF Files**: Based on our experience, Gemini models may struggle with XLIFF files containing more than 100 translation units. Performance can be inconsistent - sometimes working well but often producing hallucinations (returning only one translation unit when 50 were sent) or breaking formatting. For more reliable XLIFF processing, we recommend using alternatives like OpenAI or Azure OpenAI apps. Also, consider specifying a `Bucket size` of 15-20 or lower to ensure the model can handle the workload effectively.
+
+> **Optimizing Performance**: If you need to use Gemini for XLIFF processing, try adjusting the `Max output tokens` optional parameter. Setting this to the highest value available for your model may improve results, though be aware this will increase the cost of the action.
 
 ### Bucket size, performance and cost
 

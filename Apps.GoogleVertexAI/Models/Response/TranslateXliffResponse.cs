@@ -5,6 +5,7 @@ namespace Apps.GoogleVertexAI.Models.Response;
 
 public class TranslateXliffResponse
 {
-    public FileReference File { get; set; }
-    public UsageDto Usage { get; set; }
+    public FileReference File { get; set; } = new();
+    public UsageDto Usage { get; set; } = new();
+    public List<string> Warnings { get; set; } = new();
 }

@@ -18,6 +18,9 @@ using Google.Cloud.AIPlatform.V1;
 using MoreLinq;
 using Newtonsoft.Json;
 using Blackbird.Applications.Sdk.Common.Exceptions;
+using Apps.GoogleVertexAI.Utils;
+using Apps.GoogleVertexAI.Models.Entities;
+using Blackbird.Xliff.Utils.Models;
 
 namespace Apps.GoogleVertexAI.Actions;
 
@@ -38,17 +41,9 @@ public class GeminiXliffActions : VertexAiInvocable
     public async Task<TranslateXliffResponse> TranslateXliff(
         [ActionParameter] TranslateXliffRequest input,
         [ActionParameter] PromptRequest promptRequest,
-        [ActionParameter,
-         Display("Prompt",
-             Description =
-                 "Specify the instruction to be applied to each source tag within a translation unit. For example, 'Translate text'")]
-        string? prompt,
+        [ActionParameter, Display("Prompt", Description = "Specify the instruction to be applied to each source tag within a translation unit. For example, 'Translate text'")] string? prompt,
         [ActionParameter] GlossaryRequest glossary,
-        [ActionParameter,
-         Display("Bucket size",
-             Description =
-                 "Specify the number of source texts to be translated at once. Default value: 1500. (See our documentation for an explanation)")]
-        int? bucketSize = 1500)
+        [ActionParameter, Display("Bucket size", Description = "Specify the number of source texts to be translated at once. Default value: 1500. (See our documentation for an explanation)")] int? bucketSize)
     {
         var xliffDocument = await DownloadXliffDocumentAsync(input.File);
 
@@ -56,11 +51,8 @@ public class GeminiXliffActions : VertexAiInvocable
         var systemPrompt = GetSystemPrompt(string.IsNullOrEmpty(prompt));
         var list = xliffDocument.TranslationUnits.Select(x => x.Source).ToList();
 
-        var (translatedTexts, usage) = await GetTranslations(prompt, xliffDocument, model, systemPrompt, list,
-            bucketSize ?? 1500,
-            glossary.Glossary, promptRequest);
-
-        translatedTexts.ForEach(x =>
+        var result = await GetTranslations(prompt!, xliffDocument, model, systemPrompt, bucketSize ?? 1500, glossary.Glossary, promptRequest, input);
+        result.Translations.ForEach(x =>
         {
             var translationUnit = xliffDocument.TranslationUnits.FirstOrDefault(tu => tu.Id == x.Key);
             if (translationUnit != null)
@@ -71,7 +63,7 @@ public class GeminiXliffActions : VertexAiInvocable
 
         var stream = xliffDocument.ToStream();
         var fileReference = await _fileManagementClient.UploadAsync(stream, input.File.ContentType, input.File.Name);
-        return new TranslateXliffResponse { File = fileReference, Usage = usage };
+        return new TranslateXliffResponse { File = fileReference, Usage = result.Usage, Warnings = result.ErrorMessages };
     }
 
     [Action("Get quality scores for XLIFF file",
@@ -208,30 +200,29 @@ public class GeminiXliffActions : VertexAiInvocable
     [Action("Post-edit XLIFF file",
         Description = "Updates the targets of XLIFF 1.2 files")]
     public async Task<TranslateXliffResponse> PostEditXLIFF(
-        [ActionParameter] PostEditXliffRequest input, [ActionParameter,
-                                                       Display("Prompt",
-                                                           Description =
-                                                               "Additional instructions")]
-        string? prompt,
+        [ActionParameter] PostEditXliffRequest input,
+        [ActionParameter, Display("Prompt", Description = "Additional instructions")] string? prompt,
         [ActionParameter] GlossaryRequest glossary,
         [ActionParameter] PromptRequest promptRequest,
-        [ActionParameter,
-         Display("Bucket size",
-             Description =
-                 "Specify the number of translation units to be processed at once. Default value: 1500. (See our documentation for an explanation)")]
-        int? bucketSize = 1500)
+        [ActionParameter, Display("Bucket size", Description = "Specify the number of translation units to be processed at once. Default value: 1500. (See our documentation for an explanation)")] int? bucketSize = 1500)
     {
         if (input?.File == null)
+        {
             throw new PluginMisconfigurationException("The input file is empty. Please check your input and try again");
+        }
+
         var xliffDocument = await DownloadXliffDocumentAsync(input.File);
+        var realBucketSize = bucketSize ?? 1500;
 
         var model = promptRequest.ModelEndpoint ?? input.AIModel;
         var results = new Dictionary<string, string>();
-        var batches = xliffDocument.TranslationUnits.Batch((int)bucketSize);
-        var src = input.SourceLanguage ?? xliffDocument.SourceLanguage;
-        var tgt = input.TargetLanguage ?? xliffDocument.TargetLanguage;
-        var usage = new UsageDto();
 
+        var unitsToProcess = FilterTranslationUnits(xliffDocument.TranslationUnits, input.PostEditLockedSegments ?? false, input.ProcessOnlyTargetState);
+        var batches = unitsToProcess.Batch(realBucketSize);
+
+        var sourceLanguage = input.SourceLanguage ?? xliffDocument.SourceLanguage;
+        var targetLanguage = input.TargetLanguage ?? xliffDocument.TargetLanguage;
+        var usage = new UsageDto();
         foreach (var batch in batches)
         {
             string? glossaryPrompt = null;
@@ -253,7 +244,7 @@ public class GeminiXliffActions : VertexAiInvocable
             }
 
             var userPrompt =
-                $"Your input consists of sentences in {src} language with their translations into {tgt}. " +
+                $"Your input consists of sentences in {sourceLanguage} language with their translations into {targetLanguage}. " +
                 "Review and edit the translated target text as necessary to ensure it is a correct and accurate translation of the source text. " +
                 "If you see XML tags in the source also include them in the target text, don't delete or modify them. " +
                 "Include only the target texts (updated or not) in the format [ID:X]{target}. " +
@@ -288,6 +279,154 @@ public class GeminiXliffActions : VertexAiInvocable
         var stream = xliffDocument.ToStream();
         var finalFile = await _fileManagementClient.UploadAsync(stream, input.File.ContentType, input.File.Name);
         return new TranslateXliffResponse { File = finalFile, Usage = usage, };
+    }
+
+    [Action("Get translation issues from XLIFF file", Description = "Analyzes an XLIFF file to identify translation issues between source and target texts")]
+    public async Task<GetTranslationIssuesResponse> GetTranslationIssues(
+        [ActionParameter] GetTranslationIssuesRequest input,
+        [ActionParameter] GlossaryRequest glossary,
+        [ActionParameter] PromptRequest promptRequest,
+        [ActionParameter, Display("Prompt", Description = "Custom prompt to override the default analysis instructions")] string? prompt = null,
+        [ActionParameter, Display("Bucket size", Description = "Specify the number of translation units to be processed at once. Default value: 1500. (See our documentation for an explanation)")] int? bucketSize = 1500)
+    {
+        var xliffDocument = await DownloadXliffDocumentAsync(input.File);
+        var model = promptRequest.ModelEndpoint ?? input.AIModel;
+        var unitsToProcess = FilterTranslationUnits(xliffDocument.TranslationUnits, input.PostEditLockedSegments ?? false, input.ProcessOnlyTargetState);
+        
+        if (!unitsToProcess.Any())
+        {
+            throw new PluginMisconfigurationException("No translation units match the specified criteria.");
+        }
+
+        var sourceLanguage = input.SourceLanguage ?? xliffDocument.SourceLanguage;
+        var targetLanguage = input.TargetLanguage ?? xliffDocument.TargetLanguage;
+        var realBucketSize = bucketSize ?? 1500;
+        var batches = unitsToProcess.Batch((int)realBucketSize);
+        var usage = new UsageDto();
+        var allTranslationIssues = new List<XliffIssueDto>();
+
+        var systemPrompt = prompt ??
+            $"You are receiving multiple source texts written in {sourceLanguage} " +
+            $"that were translated into target texts written in {targetLanguage}. " +
+            "Thoroughly analyze ALL translation units provided in the batch. " +
+            "Report translation units that contain errors or issues. " +
+            "For each problematic translation unit (identified by its ID), evaluate the target text for grammatical errors, " +
+            "language structure issues, and overall linguistic coherence. " +
+            $"{(input.TargetAudience != null ? $"Consider that the target audience is {input.TargetAudience}. " : string.Empty)}" +
+            "Provide the response as a JSON array of objects with each issue: [{\"id\": \"ID\", \"issues\": \"description of issues\"}]. " +
+            "If a translation is correct and has no issues, DO NOT include it in the response. " +
+            "This format is critical as your response will be parsed programmatically.";
+
+        if (glossary.Glossary != null)
+        {
+            systemPrompt +=
+                " Ensure that the translation aligns with the glossary entries provided for the respective " +
+                "languages, and note any discrepancies, ambiguities, or incorrect usage of terms. Include " +
+                "these observations in the issues description.";
+        }
+
+        foreach (var batch in batches)
+        {
+            var userPrompt = new StringBuilder();
+            userPrompt.AppendLine($"Please analyze the following translations from {sourceLanguage} to {targetLanguage}:");
+            
+            foreach (var unit in batch)
+            {
+                userPrompt.AppendLine($"ID: {unit.Id}");
+                userPrompt.AppendLine($"Source: {unit.Source}");
+                userPrompt.AppendLine($"Target: {unit.Target}");
+                userPrompt.AppendLine();
+            }
+
+            if (glossary.Glossary != null)
+            {
+                var glossaryPromptPart = await GetGlossaryPromptPart(glossary.Glossary, string.Join(';', batch.Select(x => x.Source)));
+                if (!string.IsNullOrEmpty(glossaryPromptPart))
+                {
+                    userPrompt.AppendLine(glossaryPromptPart);
+                }
+            }
+
+            userPrompt.AppendLine("\nReturn the results as a JSON array strictly following the format specified in the system instructions.");
+
+            var (response, promptUsage) = await ExecuteGeminiPrompt(promptRequest, model, userPrompt.ToString(), systemPrompt);
+            usage += promptUsage;
+            
+            try
+            {
+                var batchIssues = GeminiResponseParser.ParseIssuesJson(response, InvocationContext.Logger);
+                foreach (var issue in batchIssues)
+                {
+                    if (!string.IsNullOrEmpty(issue.Id))
+                    {
+                        var translationUnit = xliffDocument.TranslationUnits.FirstOrDefault(tu => tu.Id == issue.Id);
+                        if (translationUnit != null)
+                        {
+                            issue.Source = translationUnit.Source!;
+                            issue.Target = translationUnit.Target!;
+                            allTranslationIssues.Add(issue);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                InvocationContext.Logger?.LogError($"[GoogleGemini] Error processing translation issues: {ex.Message}", []);
+                throw new PluginApplicationException(
+                    $"Failed to parse the JSON response from Gemini API. Error: {ex.Message}");
+            }
+        }
+        
+        string formattedIssues = XliffIssueFormatter.FormatIssues(allTranslationIssues);
+        return new GetTranslationIssuesResponse
+        {
+            Issues = formattedIssues,
+            TranslationIssues = allTranslationIssues,
+            Usage = usage
+        };
+    }
+    
+    private string BuildPlainTextSummary(IEnumerable<TranslationUnit> units, string issuesText)
+    {
+        var summary = new StringBuilder();
+        summary.AppendLine("Here is an analysis of the provided translations:");
+        summary.AppendLine();
+        
+        // Try to extract issues by ID from the text
+        foreach (var unit in units)
+        {
+            var idPattern = $@"(?:ID:|id:)[^\d]*{unit.Id}\b";
+            var idMatch = Regex.Match(issuesText, idPattern, RegexOptions.IgnoreCase);
+            
+            if (idMatch.Success)
+            {
+                var startIndex = idMatch.Index;
+                var nextIdMatch = Regex.Match(issuesText.Substring(startIndex + 1), @"(?:ID:|id:)[^\d]*\d+\b", RegexOptions.IgnoreCase);
+                var endIndex = nextIdMatch.Success 
+                    ? startIndex + 1 + nextIdMatch.Index 
+                    : issuesText.Length;
+                
+                var issueContent = issuesText.Substring(startIndex, endIndex - startIndex).Trim();
+                
+                summary.AppendLine($"**ID: {unit.Id}**");
+                summary.AppendLine($"*   Source: `{unit.Source}`");
+                summary.AppendLine($"*   Target: `{unit.Target}`");
+                summary.AppendLine($"*   **Issue(s) identified:**");
+                
+                var issueLines = issueContent.Split('\n').Skip(1); // Skip the ID line
+                foreach (var line in issueLines)
+                {
+                    if (!string.IsNullOrWhiteSpace(line))
+                    {
+                        summary.AppendLine($"    *   {line.Trim()}");
+                    }
+                }
+                
+                summary.AppendLine();
+            }
+        }
+        
+        return summary.ToString();
     }
 
     private async Task<string?> GetGlossaryPromptPart(FileReference glossary, string sourceContent)
@@ -348,20 +487,21 @@ public class GeminiXliffActions : VertexAiInvocable
 
         return prompt;
     }
-    private async Task<(Dictionary<string, string>, UsageDto)> GetTranslations(string prompt, XliffDocument xliff, string model,
-        string systemPrompt, List<string> sourceTexts, int bucketSize, FileReference? glossary,
-        PromptRequest promptRequest)
+
+    private async Task<GetTranslationsEntity> GetTranslations(string? prompt, XliffDocument xliff, string model,
+        string systemPrompt, int bucketSize, FileReference? glossary, PromptRequest promptRequest, TranslateXliffRequest translateXliffRequest)
     {
         var results = new List<string>();
-        var batches = xliff.TranslationUnits.Batch(bucketSize);
+        var errorMessages = new List<string>();
+        var unitsToProcess = FilterTranslationUnits(xliff.TranslationUnits, translateXliffRequest.PostEditLockedSegments ?? false, translateXliffRequest.ProcessOnlyTargetState);
+        var batches = unitsToProcess.Batch(bucketSize);
 
         var usageDto = new UsageDto();
+        var counter = 1;
         foreach (var batch in batches)
         {
             string json = JsonConvert.SerializeObject(batch.Select(x => "{ID:" + x.Id + "}" + x.Source));
-
             var userPrompt = GetUserPrompt(prompt, xliff, json);
-
             if (glossary != null)
             {
                 var glossaryPromptPart = await GetGlossaryPromptPart(glossary, json);
@@ -378,53 +518,80 @@ public class GeminiXliffActions : VertexAiInvocable
             }
 
             var (response, promptUsage) = await ExecuteGeminiPrompt(promptRequest, model, userPrompt, systemPrompt);
-
             usageDto += promptUsage;
-            var translatedText = response.Trim()
-                .Replace("```", string.Empty).Replace("json", string.Empty);
 
             try
             {
-                var result = JsonConvert.DeserializeObject<string[]>(translatedText.Substring(translatedText.IndexOf("[")));
-
-                if (result.Length != batch.Count())
+                var result = GeminiResponseParser.ParseStringArray(response, InvocationContext.Logger);
+                if (result.IsPartial)
                 {
-                    throw new PluginApplicationException(
-                        "Server returned inappropriate response. " +
-                        "The number of translated texts does not match the number of source texts. " +
-                        "Probably there is a duplication or a missing text in translation unit. " +
-                        "Try change model or bucket size (to lower values) or add retries to this action.");
+                    errorMessages.Add(
+                        $"The response from the Gemini API (batch number: {counter}) was incomplete. " +
+                        $"Got {result.Results.Length} results, but expected {batch.Length}. " +
+                        "Try to reduce the batch size.");
                 }
 
-                results.AddRange(result);
+                results.AddRange(result.Results);
             }
-            catch (JsonReaderException jsonEx)
+            catch (PluginApplicationException ex)
             {
+                InvocationContext.Logger?.LogError($"[GoogleGemini] Failed to parse response: {ex.Message}; Response: {response}", []);
                 throw new PluginApplicationException(
-                    "We encountered an issue while processing the response from the server. " +
-                    "It looks like the data format is incorrect, making it unreadable. " +
-                    "Please try again or adjust your request settings.\n");
+                    $"Failed to parse the response from Gemini API. The response format might be invalid or incomplete. Error: {ex.Message}");
             }
             catch (Exception e)
             {
+                InvocationContext.Logger?.LogError($"[GoogleGemini] Unexpected error parsing response: {e.Message}; Response: {response}", []);
                 throw new PluginApplicationException(
-                    $"Failed to parse the translated text. Exception message: {e.Message}; Exception type: {e.GetType()}");
+                    $"An unexpected error occurred while parsing the response. Error: {e.Message}");
+            }
+            finally
+            {
+                counter++;
             }
         }
 
-        return (results.ToDictionary(x => Regex.Match(x, "\\{ID:(.*?)\\}(.+)$").Groups[1].Value, y => Regex.Match(y, "\\{ID:(.*?)\\}(.+)$").Groups[2].Value), usageDto);
+        var dict = new Dictionary<string, string>();
+        foreach (var item in results)
+        {
+            var match = Regex.Match(item, "\\{ID:(.*?)\\}(.+)$");
+            if (match.Success && !string.IsNullOrEmpty(match.Groups[1].Value))
+            {
+                var id = match.Groups[1].Value;
+                var content = match.Groups[2].Value;
+
+                if (!dict.ContainsKey(id))
+                {
+                    dict[id] = content;
+                }
+            }
+        }
+
+        return new(dict, errorMessages, usageDto);
     }
 
-    string GetUserPrompt(string prompt, XliffDocument xliffDocument, string json)
+    private IEnumerable<TranslationUnit> FilterTranslationUnits(IEnumerable<TranslationUnit> units, bool processLocked, string? targetStateToFilter)
+    {
+        if (!string.IsNullOrEmpty(targetStateToFilter))
+        {
+            units = units.Where(x => x.TargetAttributes.TryGetValue("state", out string value) && x.TargetAttributes["state"] == targetStateToFilter);
+        }
+
+        return processLocked ? units : units.Where(x => !x.IsLocked());
+    }
+
+    private string GetUserPrompt(string? prompt, XliffDocument xliffDocument, string json)
     {
         string instruction = string.IsNullOrEmpty(prompt)
             ? $"Translate the following texts from {xliffDocument.SourceLanguage} to {xliffDocument.TargetLanguage}."
             : $"Process the following texts as per the custom instructions: {prompt}. The source language is {xliffDocument.SourceLanguage} and the target language is {xliffDocument.TargetLanguage}. This information might be useful for the custom instructions.";
 
         return
-            $"Please provide a translation for each individual text, even if similar texts have been provided more than once. " +
-            $"{instruction} Return the outputs as a serialized JSON array of strings without additional formatting " +
-            $"(it is crucial because your response will be deserialized programmatically. Please ensure that your response is formatted correctly to avoid any deserialization issues). " +
+            $"Please process ALL texts in the provided array. It is critical that you translate EVERY item individually, not just the first one. " +
+            $"{instruction} Return the outputs as a serialized JSON array of strings without additional formatting, " +
+            $"maintaining the exact same number of elements as the input array. " +
+            $"This is crucial because your response will be deserialized programmatically. " +
+            $"Do not skip any entries or provide partial results. " +
             $"Original texts (in serialized array format): {json}";
     }
 
@@ -458,7 +625,7 @@ public class GeminiXliffActions : VertexAiInvocable
             Model = endpoint,
             GenerationConfig = new GenerationConfig
             {
-                Temperature = input.Temperature ?? 0.9f ,
+                Temperature = input.Temperature ?? 0.9f,
                 TopP = input.TopP ?? 1.0f,
                 TopK = input.TopK ?? 3,
                 MaxOutputTokens = input.MaxOutputTokens ?? 8192
@@ -475,24 +642,63 @@ public class GeminiXliffActions : VertexAiInvocable
                 }
         };
         generateContentRequest.Contents.Add(content);
+        var lastMessage = string.Empty;
 
         try
         {
-            using var response = await Utils.ErrorHandler.ExecuteWithErrorHandlingAsync(async () => Client.StreamGenerateContent(generateContentRequest));
+            using var response = ErrorHandler.ExecuteWithErrorHandling(() => Client.StreamGenerateContent(generateContentRequest));
             var responseStream = response.GetResponseStream();
 
             var generatedText = new StringBuilder();
-
             var usage = new UsageDto();
             await foreach (var responseItem in responseStream)
             {
-                if (responseItem.UsageMetadata is not null)
+                if (responseItem?.UsageMetadata is not null)
+                {
                     usage += new UsageDto(responseItem.UsageMetadata);
+                }
 
-                generatedText.Append(responseItem.Candidates[0].Content.Parts[0].Text);
+                if (responseItem?.Candidates is null || responseItem.Candidates.Count == 0)
+                {
+                    continue;
+                }
+
+                var candidate = responseItem.Candidates[0];
+                if (candidate?.Content is null)
+                {
+                    continue;
+                }
+
+                if (candidate.Content.Parts is null || candidate.Content.Parts.Count == 0)
+                {
+                    continue;
+                }
+
+                var part = candidate.Content.Parts[0];
+                var currentText = part?.Text;
+
+                if (!string.IsNullOrEmpty(currentText))
+                {
+                    lastMessage = currentText;
+                    generatedText.Append(currentText);
+                }
             }
 
             return (generatedText.ToString(), usage);
+        }
+        catch (Grpc.Core.RpcException rpcException) when (rpcException.Message.Contains("Error reading next message. HttpIOException"))
+        {
+            InvocationContext.Logger?.LogError($"[GoogleGemini] Error reading next message: {rpcException.Message}", []);
+            throw new PluginApplicationException(
+                "The request to the Gemini API failed, most likely due to message size limits. Try to reduce the batch size (by default it is 1500) or add retry policy. " +
+                "If the issue persists, please contact support with the error details.");
+        }
+        catch (NullReferenceException nullEx)
+        {
+            InvocationContext.Logger?.LogError($"[GoogleGemini] Null reference error while processing response: {nullEx.Message}", []);
+            throw new PluginApplicationException(
+                "An error occurred while processing the response from Gemini API. Some expected data was missing in the response. " +
+                "Please try again or contact support if the issue persists.");
         }
         catch (Exception exception)
         {
@@ -505,7 +711,9 @@ public class GeminiXliffActions : VertexAiInvocable
         var fileStream = await _fileManagementClient.DownloadAsync(file);
 
         if (fileStream == null)
+        {
             throw new PluginMisconfigurationException("Error uploading XLIFF file. Please check you input and try again");
+        }
 
         var xliffMemoryStream = new MemoryStream();
         await fileStream.CopyToAsync(xliffMemoryStream);
