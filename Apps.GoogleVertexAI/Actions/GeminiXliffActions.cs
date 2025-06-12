@@ -502,12 +502,7 @@ public class GeminiXliffActions : VertexAiInvocable
                 {
                     usage += new UsageDto(responseItem.UsageMetadata);
                 }
-
-                await WebhookLogger.LogAsync(new
-                {
-                    ResponseItem = responseItem
-                });
-
+                
                 var currentText = responseItem.Candidates[0].Content.Parts[0].Text;
                 lastMessage = currentText;
                 generatedText.Append(currentText);
