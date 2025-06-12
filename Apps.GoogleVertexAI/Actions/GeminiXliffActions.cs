@@ -18,6 +18,8 @@ using Google.Cloud.AIPlatform.V1;
 using MoreLinq;
 using Newtonsoft.Json;
 using Blackbird.Applications.Sdk.Common.Exceptions;
+using Apps.GoogleVertexAI.Utils;
+using Apps.GoogleVertexAI.Models.Entities;
 
 namespace Apps.GoogleVertexAI.Actions;
 
@@ -38,17 +40,9 @@ public class GeminiXliffActions : VertexAiInvocable
     public async Task<TranslateXliffResponse> TranslateXliff(
         [ActionParameter] TranslateXliffRequest input,
         [ActionParameter] PromptRequest promptRequest,
-        [ActionParameter,
-         Display("Prompt",
-             Description =
-                 "Specify the instruction to be applied to each source tag within a translation unit. For example, 'Translate text'")]
-        string? prompt,
+        [ActionParameter, Display("Prompt", Description = "Specify the instruction to be applied to each source tag within a translation unit. For example, 'Translate text'")] string? prompt,
         [ActionParameter] GlossaryRequest glossary,
-        [ActionParameter,
-         Display("Bucket size",
-             Description =
-                 "Specify the number of source texts to be translated at once. Default value: 1500. (See our documentation for an explanation)")]
-        int? bucketSize = 1500)
+        [ActionParameter, Display("Bucket size", Description = "Specify the number of source texts to be translated at once. Default value: 1500. (See our documentation for an explanation)")]int? bucketSize = 1500)
     {
         var xliffDocument = await DownloadXliffDocumentAsync(input.File);
 
@@ -56,11 +50,8 @@ public class GeminiXliffActions : VertexAiInvocable
         var systemPrompt = GetSystemPrompt(string.IsNullOrEmpty(prompt));
         var list = xliffDocument.TranslationUnits.Select(x => x.Source).ToList();
 
-        var (translatedTexts, usage) = await GetTranslations(prompt, xliffDocument, model, systemPrompt, list,
-            bucketSize ?? 1500,
-            glossary.Glossary, promptRequest);
-
-        translatedTexts.ForEach(x =>
+        var result = await GetTranslations(prompt, xliffDocument, model, systemPrompt, bucketSize ?? 1500,  glossary.Glossary, promptRequest);
+        result.Translations.ForEach(x =>
         {
             var translationUnit = xliffDocument.TranslationUnits.FirstOrDefault(tu => tu.Id == x.Key);
             if (translationUnit != null)
@@ -71,7 +62,7 @@ public class GeminiXliffActions : VertexAiInvocable
 
         var stream = xliffDocument.ToStream();
         var fileReference = await _fileManagementClient.UploadAsync(stream, input.File.ContentType, input.File.Name);
-        return new TranslateXliffResponse { File = fileReference, Usage = usage };
+        return new TranslateXliffResponse { File = fileReference, Usage = result.Usage, Warnings = result.ErrorMessages };
     }
 
     [Action("Get quality scores for XLIFF file",
@@ -208,30 +199,26 @@ public class GeminiXliffActions : VertexAiInvocable
     [Action("Post-edit XLIFF file",
         Description = "Updates the targets of XLIFF 1.2 files")]
     public async Task<TranslateXliffResponse> PostEditXLIFF(
-        [ActionParameter] PostEditXliffRequest input, [ActionParameter,
-                                                       Display("Prompt",
-                                                           Description =
-                                                               "Additional instructions")]
-        string? prompt,
+        [ActionParameter] PostEditXliffRequest input,
+        [ActionParameter, Display("Prompt", Description = "Additional instructions")] string? prompt,
         [ActionParameter] GlossaryRequest glossary,
         [ActionParameter] PromptRequest promptRequest,
-        [ActionParameter,
-         Display("Bucket size",
-             Description =
-                 "Specify the number of translation units to be processed at once. Default value: 1500. (See our documentation for an explanation)")]
-        int? bucketSize = 1500)
+        [ActionParameter, Display("Bucket size", Description = "Specify the number of translation units to be processed at once. Default value: 1500. (See our documentation for an explanation)")] int? bucketSize = 1500)
     {
         if (input?.File == null)
+        {
             throw new PluginMisconfigurationException("The input file is empty. Please check your input and try again");
+        }
+
         var xliffDocument = await DownloadXliffDocumentAsync(input.File);
+        var realBucketSize = bucketSize ?? 1500;
 
         var model = promptRequest.ModelEndpoint ?? input.AIModel;
         var results = new Dictionary<string, string>();
-        var batches = xliffDocument.TranslationUnits.Batch((int)bucketSize);
+        var batches = xliffDocument.TranslationUnits.Batch(realBucketSize);
         var src = input.SourceLanguage ?? xliffDocument.SourceLanguage;
         var tgt = input.TargetLanguage ?? xliffDocument.TargetLanguage;
         var usage = new UsageDto();
-
         foreach (var batch in batches)
         {
             string? glossaryPrompt = null;
@@ -348,20 +335,20 @@ public class GeminiXliffActions : VertexAiInvocable
 
         return prompt;
     }
-    private async Task<(Dictionary<string, string>, UsageDto)> GetTranslations(string prompt, XliffDocument xliff, string model,
-        string systemPrompt, List<string> sourceTexts, int bucketSize, FileReference? glossary,
+    
+    private async Task<GetTranslationsEntity> GetTranslations(string prompt, XliffDocument xliff, string model,
+        string systemPrompt, int bucketSize, FileReference? glossary,
         PromptRequest promptRequest)
     {
         var results = new List<string>();
+        var errorMessages = new List<string>();
         var batches = xliff.TranslationUnits.Batch(bucketSize);
 
         var usageDto = new UsageDto();
         foreach (var batch in batches)
         {
             string json = JsonConvert.SerializeObject(batch.Select(x => "{ID:" + x.Id + "}" + x.Source));
-
             var userPrompt = GetUserPrompt(prompt, xliff, json);
-
             if (glossary != null)
             {
                 var glossaryPromptPart = await GetGlossaryPromptPart(glossary, json);
@@ -379,38 +366,31 @@ public class GeminiXliffActions : VertexAiInvocable
 
             var (response, promptUsage) = await ExecuteGeminiPrompt(promptRequest, model, userPrompt, systemPrompt);
             usageDto += promptUsage;
-            var translatedText = response.Trim()
-                .Replace("```", string.Empty)
-                .Replace("json", string.Empty);
 
             try
             {
-                string cleanedText = translatedText.Trim();
-                int startIndex = cleanedText.IndexOf("[");
-                if (startIndex < 0)
+                var result = GeminiResponseParser.ParseStringArray(response, InvocationContext.Logger);
+                if (result.IsPartial)
                 {
-                    throw new PluginApplicationException("Invalid response format: JSON array not found in response.");
+                    errorMessages.Add(
+                        $"The response from the Gemini API (batch number: {results.Count / bucketSize + 1}) was incomplete. " +
+                        $"Got {result.Results.Length} results, but expected {batch.Length}. " +
+                        "Try to reduce the batch size.");
                 }
 
-                string jsonContent = cleanedText.Substring(startIndex);
-                var result = JsonConvert.DeserializeObject<string[]>(jsonContent);
-                if (result != null)
-                {
-                    results.AddRange(result);
-                }
+                results.AddRange(result.Results);
             }
-            catch (JsonReaderException jsonEx)
+            catch (PluginApplicationException ex)
             {
-                InvocationContext.Logger?.LogError($"[GoogleGemini] JSON parsing error: {jsonEx.Message}; Translated text: {translatedText}", []);
+                InvocationContext.Logger?.LogError($"[GoogleGemini] Failed to parse response: {ex.Message}; Response: {response}", []);
                 throw new PluginApplicationException(
-                    "We encountered an issue while processing the response from the server. " +
-                    "It looks like the data format is incorrect, making it unreadable. " +
-                    "Please try again or adjust your request settings.\n");
+                    $"Failed to parse the response from Gemini API. The response format might be invalid or incomplete. Error: {ex.Message}");
             }
             catch (Exception e)
             {
+                InvocationContext.Logger?.LogError($"[GoogleGemini] Unexpected error parsing response: {e.Message}; Response: {response}", []);
                 throw new PluginApplicationException(
-                    $"Failed to parse the translated text. Exception message: {e.Message}; Exception type: {e.GetType()}");
+                    $"An unexpected error occurred while parsing the response. Error: {e.Message}");
             }
         }
 
@@ -430,7 +410,7 @@ public class GeminiXliffActions : VertexAiInvocable
             }
         }
 
-        return (dict, usageDto);
+        return new(dict, errorMessages, usageDto);
     }
 
     string GetUserPrompt(string prompt, XliffDocument xliffDocument, string json)
@@ -496,21 +476,29 @@ public class GeminiXliffActions : VertexAiInvocable
 
         try
         {
-            using var response = await Utils.ErrorHandler.ExecuteWithErrorHandlingAsync(async () => Client.StreamGenerateContent(generateContentRequest));
+            using var response = ErrorHandler.ExecuteWithErrorHandling(() => Client.StreamGenerateContent(generateContentRequest));
             var responseStream = response.GetResponseStream();
 
             var generatedText = new StringBuilder();
-
             var usage = new UsageDto();
             await foreach (var responseItem in responseStream)
             {
                 if (responseItem.UsageMetadata is not null)
+                {
                     usage += new UsageDto(responseItem.UsageMetadata);
+                }
 
                 generatedText.Append(responseItem.Candidates[0].Content.Parts[0].Text);
             }
 
             return (generatedText.ToString(), usage);
+        }
+        catch (Grpc.Core.RpcException rpcException) when (rpcException.Message.Contains("Error reading next message. HttpIOException"))
+        {
+            InvocationContext.Logger?.LogError($"[GoogleGemini] Error reading next message: {rpcException.Message}", []);
+            throw new PluginApplicationException(
+                "The request to the Gemini API failed, most likely due to message size limits. Try to reduce the batch size (by default it is 1500) or add retry policy. " +
+                "If the issue persists, please contact support with the error details.");
         }
         catch (Exception exception)
         {
@@ -523,7 +511,9 @@ public class GeminiXliffActions : VertexAiInvocable
         var fileStream = await _fileManagementClient.DownloadAsync(file);
 
         if (fileStream == null)
+        {
             throw new PluginMisconfigurationException("Error uploading XLIFF file. Please check you input and try again");
+        }
 
         var xliffMemoryStream = new MemoryStream();
         await fileStream.CopyToAsync(xliffMemoryStream);
