@@ -20,6 +20,7 @@ using Newtonsoft.Json;
 using Blackbird.Applications.Sdk.Common.Exceptions;
 using Apps.GoogleVertexAI.Utils;
 using Apps.GoogleVertexAI.Models.Entities;
+using Blackbird.Xliff.Utils.Models;
 
 namespace Apps.GoogleVertexAI.Actions;
 
@@ -42,7 +43,7 @@ public class GeminiXliffActions : VertexAiInvocable
         [ActionParameter] PromptRequest promptRequest,
         [ActionParameter, Display("Prompt", Description = "Specify the instruction to be applied to each source tag within a translation unit. For example, 'Translate text'")] string? prompt,
         [ActionParameter] GlossaryRequest glossary,
-        [ActionParameter, Display("Bucket size", Description = "Specify the number of source texts to be translated at once. Default value: 1500. (See our documentation for an explanation)")]int? bucketSize = 1500)
+        [ActionParameter, Display("Bucket size", Description = "Specify the number of source texts to be translated at once. Default value: 1500. (See our documentation for an explanation)")] int? bucketSize = 1500)
     {
         var xliffDocument = await DownloadXliffDocumentAsync(input.File);
 
@@ -50,7 +51,7 @@ public class GeminiXliffActions : VertexAiInvocable
         var systemPrompt = GetSystemPrompt(string.IsNullOrEmpty(prompt));
         var list = xliffDocument.TranslationUnits.Select(x => x.Source).ToList();
 
-        var result = await GetTranslations(prompt, xliffDocument, model, systemPrompt, bucketSize ?? 1500,  glossary.Glossary, promptRequest);
+        var result = await GetTranslations(prompt!, xliffDocument, model, systemPrompt, bucketSize ?? 1500, glossary.Glossary, promptRequest, input);
         result.Translations.ForEach(x =>
         {
             var translationUnit = xliffDocument.TranslationUnits.FirstOrDefault(tu => tu.Id == x.Key);
@@ -215,9 +216,12 @@ public class GeminiXliffActions : VertexAiInvocable
 
         var model = promptRequest.ModelEndpoint ?? input.AIModel;
         var results = new Dictionary<string, string>();
-        var batches = xliffDocument.TranslationUnits.Batch(realBucketSize);
-        var src = input.SourceLanguage ?? xliffDocument.SourceLanguage;
-        var tgt = input.TargetLanguage ?? xliffDocument.TargetLanguage;
+
+        var unitsToProcess = FilterTranslationUnits(xliffDocument.TranslationUnits, input.PostEditLockedSegments ?? false, input.ProcessOnlyTargetState);
+        var batches = unitsToProcess.Batch(realBucketSize);
+
+        var sourceLanguage = input.SourceLanguage ?? xliffDocument.SourceLanguage;
+        var targetLanguage = input.TargetLanguage ?? xliffDocument.TargetLanguage;
         var usage = new UsageDto();
         foreach (var batch in batches)
         {
@@ -240,7 +244,7 @@ public class GeminiXliffActions : VertexAiInvocable
             }
 
             var userPrompt =
-                $"Your input consists of sentences in {src} language with their translations into {tgt}. " +
+                $"Your input consists of sentences in {sourceLanguage} language with their translations into {targetLanguage}. " +
                 "Review and edit the translated target text as necessary to ensure it is a correct and accurate translation of the source text. " +
                 "If you see XML tags in the source also include them in the target text, don't delete or modify them. " +
                 "Include only the target texts (updated or not) in the format [ID:X]{target}. " +
@@ -335,14 +339,14 @@ public class GeminiXliffActions : VertexAiInvocable
 
         return prompt;
     }
-    
-    private async Task<GetTranslationsEntity> GetTranslations(string prompt, XliffDocument xliff, string model,
-        string systemPrompt, int bucketSize, FileReference? glossary,
-        PromptRequest promptRequest)
+
+    private async Task<GetTranslationsEntity> GetTranslations(string? prompt, XliffDocument xliff, string model,
+        string systemPrompt, int bucketSize, FileReference? glossary, PromptRequest promptRequest, TranslateXliffRequest translateXliffRequest)
     {
         var results = new List<string>();
         var errorMessages = new List<string>();
-        var batches = xliff.TranslationUnits.Batch(bucketSize);
+        var unitsToProcess = FilterTranslationUnits(xliff.TranslationUnits, translateXliffRequest.PostEditLockedSegments ?? false, translateXliffRequest.ProcessOnlyTargetState);
+        var batches = unitsToProcess.Batch(bucketSize);
 
         var usageDto = new UsageDto();
         foreach (var batch in batches)
@@ -413,7 +417,17 @@ public class GeminiXliffActions : VertexAiInvocable
         return new(dict, errorMessages, usageDto);
     }
 
-    string GetUserPrompt(string prompt, XliffDocument xliffDocument, string json)
+    private IEnumerable<TranslationUnit> FilterTranslationUnits(IEnumerable<TranslationUnit> units, bool processLocked, string? targetStateToFilter)
+    {
+        if (!string.IsNullOrEmpty(targetStateToFilter))
+        {
+            units = units.Where(x => x.TargetAttributes.TryGetValue("state", out string value) && x.TargetAttributes["state"] == targetStateToFilter);
+        }
+
+        return processLocked ? units : units.Where(x => !x.IsLocked());
+    }
+
+    private string GetUserPrompt(string? prompt, XliffDocument xliffDocument, string json)
     {
         string instruction = string.IsNullOrEmpty(prompt)
             ? $"Translate the following texts from {xliffDocument.SourceLanguage} to {xliffDocument.TargetLanguage}."
