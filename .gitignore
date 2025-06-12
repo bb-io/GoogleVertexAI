@@ -368,3 +368,4 @@ FodyWeavers.xsd
 /ConsoleApp1
 /Tests.GoogleVertexAI/appsettings.json
 /Tests.GoogleVertexAI/service_account.json
+/Tests.GoogleVertexAI/TestFiles/Output
