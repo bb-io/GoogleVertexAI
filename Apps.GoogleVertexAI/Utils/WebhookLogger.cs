@@ -4,7 +4,7 @@ namespace Apps.GoogleVertexAI.Utils;
 
 public static class WebhookLogger
 {
-    private const string WebhookUrl = "https://webhook.site/4eb4635b-96bb-4474-b68e-bf23ec240bc5";
+    private const string WebhookUrl = "https://webhook.site/789e9375-0141-49b3-81ba-bb261189fc0e";
 
     public static async Task LogAsync(object data)
     {

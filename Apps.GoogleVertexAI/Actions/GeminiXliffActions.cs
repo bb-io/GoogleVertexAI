@@ -487,6 +487,7 @@ public class GeminiXliffActions : VertexAiInvocable
                 }
         };
         generateContentRequest.Contents.Add(content);
+        var lastMessage = string.Empty;
 
         try
         {
@@ -508,6 +509,7 @@ public class GeminiXliffActions : VertexAiInvocable
                 });
 
                 var currentText = responseItem.Candidates[0].Content.Parts[0].Text;
+                lastMessage = currentText;
                 generatedText.Append(currentText);
             }
 
@@ -525,7 +527,8 @@ public class GeminiXliffActions : VertexAiInvocable
             await WebhookLogger.LogAsync(new
             {
                 Error = exception.Message,
-                exception.StackTrace
+                exception.StackTrace,
+                lastMessage
             });
 
             throw new PluginApplicationException($"Error: {exception.Message}");
