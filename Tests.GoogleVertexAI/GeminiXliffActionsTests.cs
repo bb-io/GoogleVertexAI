@@ -75,8 +75,6 @@ public class GeminiXliffActionsTests : TestBase
             TargetAudience = "General public"
         };
         
-        var analysisPrompt = "Analyze the translation quality and identify any grammatical errors, " +
-                           "mistranslations, inconsistencies in terminology, or stylistic issues.";
         var modelRequest = new PromptRequest { ModelEndpoint = ModelName };
         var glossaryRequest = new GlossaryRequest();
         
@@ -85,7 +83,7 @@ public class GeminiXliffActionsTests : TestBase
             issuesRequest,
             glossaryRequest,
             modelRequest,
-            analysisPrompt,
+            null,
             bucketSize: 100);
         
         // Assert

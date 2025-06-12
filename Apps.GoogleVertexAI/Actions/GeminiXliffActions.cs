@@ -305,16 +305,19 @@ public class GeminiXliffActions : VertexAiInvocable
         var allIssues = new StringBuilder();
         
         var systemPrompt = prompt ?? 
-            $"You are receiving a source text written in {sourceLanguage} " +
-            $"that was translated into target text written in {targetLanguage}. " +
-            "Evaluate the target text for grammatical errors, language structure issues, and overall linguistic coherence, " +
-            "including them in the issues description. Respond with the issues description. " +
+            $"You are receiving multiple source texts written in {sourceLanguage} " +
+            $"that were translated into target texts written in {targetLanguage}. " +
+            "Thoroughly analyze ALL translation units provided in the batch. " +
+            "For EACH translation unit (identified by its ID), evaluate the target text for grammatical errors, " +
+            "language structure issues, and overall linguistic coherence. " +
+            "Include the ID with each issue you identify. " +
+            "Do not skip any translation units - it's critical to evaluate all units in the batch. " +
             $"{(input.TargetAudience != null ? $"The target audience is {input.TargetAudience}" : string.Empty)}";
 
         if (glossary.Glossary != null)
         {
             systemPrompt +=
-                " Ensure that the translation aligns with the glossary entries provided for the respective " +
+                " Ensure that+the translation aligns with the glossary entries provided for the respective " +
                 "languages, and note any discrepancies, ambiguities, or incorrect usage of terms. Include " +
                 "these observations in the issues description.";
         }
@@ -519,9 +522,11 @@ public class GeminiXliffActions : VertexAiInvocable
             : $"Process the following texts as per the custom instructions: {prompt}. The source language is {xliffDocument.SourceLanguage} and the target language is {xliffDocument.TargetLanguage}. This information might be useful for the custom instructions.";
 
         return
-            $"Please provide a translation for each individual text, even if similar texts have been provided more than once. " +
-            $"{instruction} Return the outputs as a serialized JSON array of strings without additional formatting " +
-            $"(it is crucial because your response will be deserialized programmatically. Please ensure that your response is formatted correctly to avoid any deserialization issues). " +
+            $"Please process ALL texts in the provided array. It is critical that you translate EVERY item individually, not just the first one. " +
+            $"{instruction} Return the outputs as a serialized JSON array of strings without additional formatting, " +
+            $"maintaining the exact same number of elements as the input array. " +
+            $"This is crucial because your response will be deserialized programmatically. " +
+            $"Do not skip any entries or provide partial results. " +
             $"Original texts (in serialized array format): {json}";
     }
 
