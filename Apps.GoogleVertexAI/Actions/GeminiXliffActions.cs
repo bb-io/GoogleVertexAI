@@ -374,6 +374,14 @@ public class GeminiXliffActions : VertexAiInvocable
             try
             {
                 var result = GeminiResponseParser.ParseStringArray(response, InvocationContext.Logger);
+
+                await WebhookLogger.LogAsync(new
+                {
+                    BatchNumber = results.Count / bucketSize + 1,
+                    BatchSize = batch.Length,
+                    result,
+                    ResultCount = result.Results.Length
+                });
                 if (result.IsPartial)
                 {
                     errorMessages.Add(
@@ -502,10 +510,13 @@ public class GeminiXliffActions : VertexAiInvocable
                 {
                     usage += new UsageDto(responseItem.UsageMetadata);
                 }
-                
+
                 var currentText = responseItem.Candidates[0].Content.Parts[0].Text;
-                lastMessage = currentText;
-                generatedText.Append(currentText);
+                if (!string.IsNullOrEmpty(currentText))
+                {
+                    lastMessage = currentText;
+                    generatedText.Append(currentText);
+                }
             }
 
             return (generatedText.ToString(), usage);
