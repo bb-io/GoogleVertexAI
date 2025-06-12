@@ -84,14 +84,14 @@ public class GeminiXliffActionsTests : TestBase
             glossaryRequest,
             modelRequest,
             null,
-            bucketSize: 100);
+            bucketSize: 15);
         
         // Assert
         Assert.IsNotNull(result);
         Assert.IsNotNull(result.Issues);
         Assert.IsTrue(result.Issues.Length > 0);
         Assert.IsNotNull(result.Usage);
-        Console.WriteLine($"Issues analysis length: {result.Issues.Length}");
-        Console.WriteLine(result.Issues);
+        Console.WriteLine($"Issues analysis length: {result.TranslationIssues.Count}");
+        Console.WriteLine(JsonConvert.SerializeObject(result.TranslationIssues, Formatting.Indented));
     }
 }

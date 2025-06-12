@@ -299,24 +299,28 @@ public class GeminiXliffActions : VertexAiInvocable
         }
 
         var sourceLanguage = input.SourceLanguage ?? xliffDocument.SourceLanguage;
-        var targetLanguage = input.TargetLanguage ?? xliffDocument.TargetLanguage;        var realBucketSize = bucketSize ?? 1500;
+        var targetLanguage = input.TargetLanguage ?? xliffDocument.TargetLanguage;
+        var realBucketSize = bucketSize ?? 1500;
         var batches = unitsToProcess.Batch((int)realBucketSize);
         var usage = new UsageDto();
-        var allIssues = new StringBuilder();
-        
-        var systemPrompt = prompt ?? 
+        var allTranslationIssues = new List<XliffIssueDto>();
+
+        var systemPrompt = prompt ??
             $"You are receiving multiple source texts written in {sourceLanguage} " +
             $"that were translated into target texts written in {targetLanguage}. " +
             "Thoroughly analyze ALL translation units provided in the batch. " +
-            "For translation unit (identified by its ID), evaluate the target text for grammatical errors, " +
+            "Report translation units that contain errors or issues. " +
+            "For each problematic translation unit (identified by its ID), evaluate the target text for grammatical errors, " +
             "language structure issues, and overall linguistic coherence. " +
-            "Include the ID with each issue you identify. " +
-            $"{(input.TargetAudience != null ? $"The target audience is {input.TargetAudience}" : string.Empty)}";
+            $"{(input.TargetAudience != null ? $"Consider that the target audience is {input.TargetAudience}. " : string.Empty)}" +
+            "Provide the response as a JSON array of objects with each issue: [{\"id\": \"ID\", \"issues\": \"description of issues\"}]. " +
+            "If a translation is correct and has no issues, DO NOT include it in the response. " +
+            "This format is critical as your response will be parsed programmatically.";
 
         if (glossary.Glossary != null)
         {
             systemPrompt +=
-                " Ensure that+the translation aligns with the glossary entries provided for the respective " +
+                " Ensure that the translation aligns with the glossary entries provided for the respective " +
                 "languages, and note any discrepancies, ambiguities, or incorrect usage of terms. Include " +
                 "these observations in the issues description.";
         }
@@ -343,24 +347,86 @@ public class GeminiXliffActions : VertexAiInvocable
                 }
             }
 
-            var (issues, promptUsage) = await ExecuteGeminiPrompt(promptRequest, model, userPrompt.ToString(), systemPrompt);
+            userPrompt.AppendLine("\nReturn the results as a JSON array strictly following the format specified in the system instructions.");
+
+            var (response, promptUsage) = await ExecuteGeminiPrompt(promptRequest, model, userPrompt.ToString(), systemPrompt);
             usage += promptUsage;
             
-            if (allIssues.Length > 0)
+            try
             {
-                allIssues.AppendLine();
-                allIssues.AppendLine("---");
-                allIssues.AppendLine();
+                var batchIssues = GeminiResponseParser.ParseIssuesJson(response, InvocationContext.Logger);
+                foreach (var issue in batchIssues)
+                {
+                    if (!string.IsNullOrEmpty(issue.Id))
+                    {
+                        var translationUnit = xliffDocument.TranslationUnits.FirstOrDefault(tu => tu.Id == issue.Id);
+                        if (translationUnit != null)
+                        {
+                            issue.Source = translationUnit.Source!;
+                            issue.Target = translationUnit.Target!;
+                            allTranslationIssues.Add(issue);
+                        }
+                    }
+                }
             }
-            
-            allIssues.Append(issues);
+            catch (Exception ex)
+            {
+                InvocationContext.Logger?.LogError($"[GoogleGemini] Error processing translation issues: {ex.Message}", []);
+                throw new PluginApplicationException(
+                    $"Failed to parse the JSON response from Gemini API. Error: {ex.Message}");
+            }
         }
-
+        
+        string formattedIssues = XliffIssueFormatter.FormatIssues(allTranslationIssues);
         return new GetTranslationIssuesResponse
         {
-            Issues = allIssues.ToString(),
+            Issues = formattedIssues,
+            TranslationIssues = allTranslationIssues,
             Usage = usage
         };
+    }
+    
+    private string BuildPlainTextSummary(IEnumerable<TranslationUnit> units, string issuesText)
+    {
+        var summary = new StringBuilder();
+        summary.AppendLine("Here is an analysis of the provided translations:");
+        summary.AppendLine();
+        
+        // Try to extract issues by ID from the text
+        foreach (var unit in units)
+        {
+            var idPattern = $@"(?:ID:|id:)[^\d]*{unit.Id}\b";
+            var idMatch = Regex.Match(issuesText, idPattern, RegexOptions.IgnoreCase);
+            
+            if (idMatch.Success)
+            {
+                var startIndex = idMatch.Index;
+                var nextIdMatch = Regex.Match(issuesText.Substring(startIndex + 1), @"(?:ID:|id:)[^\d]*\d+\b", RegexOptions.IgnoreCase);
+                var endIndex = nextIdMatch.Success 
+                    ? startIndex + 1 + nextIdMatch.Index 
+                    : issuesText.Length;
+                
+                var issueContent = issuesText.Substring(startIndex, endIndex - startIndex).Trim();
+                
+                summary.AppendLine($"**ID: {unit.Id}**");
+                summary.AppendLine($"*   Source: `{unit.Source}`");
+                summary.AppendLine($"*   Target: `{unit.Target}`");
+                summary.AppendLine($"*   **Issue(s) identified:**");
+                
+                var issueLines = issueContent.Split('\n').Skip(1); // Skip the ID line
+                foreach (var line in issueLines)
+                {
+                    if (!string.IsNullOrWhiteSpace(line))
+                    {
+                        summary.AppendLine($"    *   {line.Trim()}");
+                    }
+                }
+                
+                summary.AppendLine();
+            }
+        }
+        
+        return summary.ToString();
     }
 
     private async Task<string?> GetGlossaryPromptPart(FileReference glossary, string sourceContent)
