@@ -43,7 +43,7 @@ public class GeminiXliffActions : VertexAiInvocable
         [ActionParameter] PromptRequest promptRequest,
         [ActionParameter, Display("Prompt", Description = "Specify the instruction to be applied to each source tag within a translation unit. For example, 'Translate text'")] string? prompt,
         [ActionParameter] GlossaryRequest glossary,
-        [ActionParameter, Display("Bucket size", Description = "Specify the number of source texts to be translated at once. Default value: 1500. (See our documentation for an explanation)")] int? bucketSize = 1500)
+        [ActionParameter, Display("Bucket size", Description = "Specify the number of source texts to be translated at once. Default value: 1500. (See our documentation for an explanation)")] int? bucketSize)
     {
         var xliffDocument = await DownloadXliffDocumentAsync(input.File);
 
@@ -502,7 +502,13 @@ public class GeminiXliffActions : VertexAiInvocable
                     usage += new UsageDto(responseItem.UsageMetadata);
                 }
 
-                generatedText.Append(responseItem.Candidates[0].Content.Parts[0].Text);
+                await WebhookLogger.LogAsync(new
+                {
+                    ResponseItem = responseItem
+                });
+
+                var currentText = responseItem.Candidates[0].Content.Parts[0].Text;
+                generatedText.Append(currentText);
             }
 
             return (generatedText.ToString(), usage);
@@ -516,6 +522,12 @@ public class GeminiXliffActions : VertexAiInvocable
         }
         catch (Exception exception)
         {
+            await WebhookLogger.LogAsync(new
+            {
+                Error = exception.Message,
+                exception.StackTrace
+            });
+
             throw new PluginApplicationException($"Error: {exception.Message}");
         }
     }
