@@ -506,12 +506,30 @@ public class GeminiXliffActions : VertexAiInvocable
             var usage = new UsageDto();
             await foreach (var responseItem in responseStream)
             {
-                if (responseItem.UsageMetadata is not null)
+                if (responseItem?.UsageMetadata is not null)
                 {
                     usage += new UsageDto(responseItem.UsageMetadata);
                 }
 
-                var currentText = responseItem.Candidates[0].Content.Parts[0].Text;
+                if (responseItem?.Candidates is null || responseItem.Candidates.Count == 0)
+                {
+                    continue;
+                }
+
+                var candidate = responseItem.Candidates[0];
+                if (candidate?.Content is null)
+                {
+                    continue;
+                }
+
+                if (candidate.Content.Parts is null || candidate.Content.Parts.Count == 0)
+                {
+                    continue;
+                }
+
+                var part = candidate.Content.Parts[0];
+                var currentText = part?.Text;
+
                 if (!string.IsNullOrEmpty(currentText))
                 {
                     lastMessage = currentText;
@@ -527,6 +545,20 @@ public class GeminiXliffActions : VertexAiInvocable
             throw new PluginApplicationException(
                 "The request to the Gemini API failed, most likely due to message size limits. Try to reduce the batch size (by default it is 1500) or add retry policy. " +
                 "If the issue persists, please contact support with the error details.");
+        }
+        catch (NullReferenceException nullEx)
+        {
+            InvocationContext.Logger?.LogError($"[GoogleGemini] Null reference error while processing response: {nullEx.Message}", []);
+            await WebhookLogger.LogAsync(new
+            {
+                Error = $"Null reference error: {nullEx.Message}",
+                nullEx.StackTrace,
+                lastMessage
+            });
+
+            throw new PluginApplicationException(
+                "An error occurred while processing the response from Gemini API. Some expected data was missing in the response. " +
+                "Please try again or contact support if the issue persists.");
         }
         catch (Exception exception)
         {
