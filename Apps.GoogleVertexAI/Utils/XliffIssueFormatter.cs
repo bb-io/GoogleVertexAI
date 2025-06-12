@@ -19,23 +19,22 @@ public static class XliffIssueFormatter
         foreach (var issue in issues)
         {
             sb.AppendLine($"ID: {issue.Id}");
-            sb.AppendLine($"   Source: `{issue.Source}`");
-            sb.AppendLine($"   Target: `{issue.Target}`");
-            sb.AppendLine($"   Issue(s) identified:");
+            sb.AppendLine($"Source: `{issue.Source}`");
+            sb.AppendLine($"Target: `{issue.Target}`");
+            sb.AppendLine($"Issue(s) identified:");
             
             var issueLines = issue.Issues.Split('\n', StringSplitOptions.RemoveEmptyEntries);
             foreach (var line in issueLines)
             {
                 if (!string.IsNullOrWhiteSpace(line))
                 {
-                    sb.AppendLine($"    *   {line.Trim()}");
+                    sb.AppendLine($"* {line.Trim()}");
                 }
             }
             
-            // If no line breaks, output as a single bullet point
             if (issueLines.Length <= 1)
             {
-                sb.AppendLine($"    *   {issue.Issues.Trim()}");
+                sb.AppendLine($"* {issue.Issues.Trim()}");
             }
             
             sb.AppendLine();
