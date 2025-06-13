@@ -207,93 +207,79 @@ public class GeminiXliffActions : VertexAiInvocable
         [ActionParameter] PromptRequest promptRequest,
         [ActionParameter, Display("Bucket size", Description = "Specify the number of translation units to be processed at once. Default value: 1500. (See our documentation for an explanation)")] int? bucketSize = 1500)
     {
-        try
+        if (input.File == null || string.IsNullOrEmpty(input.File.Name))
         {
-            if (input.File == null || string.IsNullOrEmpty(input.File.Name))
+            throw new PluginMisconfigurationException("The input file is empty. Please check your input and try again");
+        }
+
+        var xliffDocument = await DownloadXliffDocumentAsync(input.File);
+        var realBucketSize = bucketSize ?? 1500;
+
+        var model = promptRequest.ModelEndpoint ?? input.AIModel;
+        var results = new Dictionary<string, string>();
+
+        var unitsToProcess = FilterTranslationUnits(xliffDocument.TranslationUnits, input.PostEditLockedSegments ?? false, input.ProcessOnlyTargetState);
+        var batches = unitsToProcess.Batch(realBucketSize);
+
+        var sourceLanguage = input.SourceLanguage ?? xliffDocument.SourceLanguage;
+        var targetLanguage = input.TargetLanguage ?? xliffDocument.TargetLanguage;
+        var usage = new UsageDto();
+        foreach (var batch in batches)
+        {
+            string? glossaryPrompt = null;
+            if (glossary?.Glossary != null)
             {
-                throw new PluginMisconfigurationException("The input file is empty. Please check your input and try again");
-            }
-
-            var xliffDocument = await DownloadXliffDocumentAsync(input.File);
-            var realBucketSize = bucketSize ?? 1500;
-
-            var model = promptRequest.ModelEndpoint ?? input.AIModel;
-            var results = new Dictionary<string, string>();
-
-            var unitsToProcess = FilterTranslationUnits(xliffDocument.TranslationUnits, input.PostEditLockedSegments ?? false, input.ProcessOnlyTargetState);
-            var batches = unitsToProcess.Batch(realBucketSize);
-
-            var sourceLanguage = input.SourceLanguage ?? xliffDocument.SourceLanguage;
-            var targetLanguage = input.TargetLanguage ?? xliffDocument.TargetLanguage;
-            var usage = new UsageDto();
-            foreach (var batch in batches)
-            {
-                string? glossaryPrompt = null;
-                if (glossary?.Glossary != null)
+                var glossaryPromptPart =
+                    await GetGlossaryPromptPart(glossary.Glossary,
+                        string.Join(';', batch.Select(x => x.Source)) + ";" +
+                        string.Join(';', batch.Select(x => x.Target)));
+                if (glossaryPromptPart != null)
                 {
-                    var glossaryPromptPart =
-                        await GetGlossaryPromptPart(glossary.Glossary,
-                            string.Join(';', batch.Select(x => x.Source)) + ";" +
-                            string.Join(';', batch.Select(x => x.Target)));
-                    if (glossaryPromptPart != null)
-                    {
-                        glossaryPrompt +=
-                            "Enhance the target text by incorporating relevant terms from our glossary where applicable. " +
-                            "Ensure that the translation aligns with the glossary entries for the respective languages. " +
-                            "If a term has variations or synonyms, consider them and choose the most appropriate " +
-                            "translation to maintain consistency and precision. ";
-                        glossaryPrompt += glossaryPromptPart;
-                    }
-                }
-
-                var userPrompt =
-                    $"Your input consists of sentences in {sourceLanguage} language with their translations into {targetLanguage}. " +
-                    "Review and edit the translated target text as necessary to ensure it is a correct and accurate translation of the source text. " +
-                    "If you see XML tags in the source also include them in the target text, don't delete or modify them. " +
-                    "Include only the target texts (updated or not) in the format [ID:X]{target}. " +
-                    $"Example: [ID:1]{{target1}},[ID:2]{{target2}}. " +
-                    $"{prompt ?? ""} {glossaryPrompt ?? ""} Sentences: \n" +
-                    string.Join("\n", batch.Select(tu => $"ID: {tu.Id}; Source: {tu.Source}; Target: {tu.Target}"));
-
-                var systemPrompt =
-                    "You are a linguistic expert that should process the following texts according to the given instructions";
-                var (result, promptUsage) = await ExecuteGeminiPrompt(promptRequest, model, userPrompt, systemPrompt);
-                usage += promptUsage;
-
-                var matches = Regex.Matches(result, @"\[ID:(.+?)\]\{([\s\S]+?)\}(?=,\[|$|,?\n)").Cast<Match>().ToList();
-                foreach (var match in matches)
-                {
-                    if (match.Groups[2].Value.Contains("[ID:"))
-                        continue;
-                    results.Add(match.Groups[1].Value, match.Groups[2].Value);
+                    glossaryPrompt +=
+                        "Enhance the target text by incorporating relevant terms from our glossary where applicable. " +
+                        "Ensure that the translation aligns with the glossary entries for the respective languages. " +
+                        "If a term has variations or synonyms, consider them and choose the most appropriate " +
+                        "translation to maintain consistency and precision. ";
+                    glossaryPrompt += glossaryPromptPart;
                 }
             }
 
-            var updatedResults = Blackbird.Xliff.Utils.Utils.XliffExtensions.CheckTagIssues(xliffDocument.TranslationUnits, results);
-            updatedResults.ForEach(x =>
-            {
-                var translationUnit = xliffDocument.TranslationUnits.FirstOrDefault(tu => tu.Id == x.Key);
-                if (translationUnit != null)
-                {
-                    translationUnit.Target = x.Value;
-                }
-            });
+            var userPrompt =
+                $"Your input consists of sentences in {sourceLanguage} language with their translations into {targetLanguage}. " +
+                "Review and edit the translated target text as necessary to ensure it is a correct and accurate translation of the source text. " +
+                "If you see XML tags in the source also include them in the target text, don't delete or modify them. " +
+                "Include only the target texts (updated or not) in the format [ID:X]{target}. " +
+                $"Example: [ID:1]{{target1}},[ID:2]{{target2}}. " +
+                $"{prompt ?? ""} {glossaryPrompt ?? ""} Sentences: \n" +
+                string.Join("\n", batch.Select(tu => $"ID: {tu.Id}; Source: {tu.Source}; Target: {tu.Target}"));
 
-            var stream = xliffDocument.ToStream();
-            var finalFile = await _fileManagementClient.UploadAsync(stream, input.File.ContentType, input.File.Name);
-            return new TranslateXliffResponse { File = finalFile, Usage = usage, };
-        }
-        catch (Exception ex)
-        {
-            await LogToWebhookAsync(new
+            var systemPrompt =
+                "You are a linguistic expert that should process the following texts according to the given instructions";
+            var (result, promptUsage) = await ExecuteGeminiPrompt(promptRequest, model, userPrompt, systemPrompt);
+            usage += promptUsage;
+
+            var matches = Regex.Matches(result, @"\[ID:(.+?)\]\{([\s\S]+?)\}(?=,\[|$|,?\n)").Cast<Match>().ToList();
+            foreach (var match in matches)
             {
-                Message = "Error processing XLIFF file",
-                Error = ex.Message,
-                StackTrace = ex.StackTrace
-            });
-            
-            throw;
+                if (match.Groups[2].Value.Contains("[ID:"))
+                    continue;
+                results.Add(match.Groups[1].Value, match.Groups[2].Value);
+            }
         }
+
+        var updatedResults = Blackbird.Xliff.Utils.Utils.XliffExtensions.CheckTagIssues(xliffDocument.TranslationUnits, results);
+        updatedResults.ForEach(x =>
+        {
+            var translationUnit = xliffDocument.TranslationUnits.FirstOrDefault(tu => tu.Id == x.Key);
+            if (translationUnit != null)
+            {
+                translationUnit.Target = x.Value;
+            }
+        });
+
+        var stream = xliffDocument.ToStream();
+        var finalFile = await _fileManagementClient.UploadAsync(stream, input.File.ContentType, input.File.Name);
+        return new TranslateXliffResponse { File = finalFile, Usage = usage, };
     }
 
     [Action("Get translation issues from XLIFF file", Description = "Analyzes an XLIFF file to identify translation issues between source and target texts")]
@@ -723,12 +709,6 @@ public class GeminiXliffActions : VertexAiInvocable
 
     protected async Task<XliffDocument> DownloadXliffDocumentAsync(FileReference file)
     {
-        await LogToWebhookAsync(new
-        {
-            Message = "Downloading XLIFF file",
-            file
-        });
-
         var fileStream = await _fileManagementClient.DownloadAsync(file);
 
         if (fileStream == null)
@@ -747,14 +727,5 @@ public class GeminiXliffActions : VertexAiInvocable
         }
 
         return xliffDocument;
-    }
-
-    private static Task LogToWebhookAsync(object obj)
-    {
-        const string WebhookUrl = "https://webhook.site/789e9375-0141-49b3-81ba-bb261189fc0e";
-        var restClient = new RestClient(WebhookUrl);
-        var request = new RestRequest(string.Empty, Method.Post)
-            .AddJsonBody(obj, "application/json");
-        return restClient.ExecuteAsync(request, CancellationToken.None);
     }
 }
