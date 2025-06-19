@@ -430,23 +430,16 @@ public class GeminiXliffActions : VertexAiInvocable
                 "along with terminology problems not related to the glossary.";
         }
 
-          var userPrompt = new StringBuilder();
-            userPrompt.AppendLine($"Please analyze the following translations from {sourceLanguage} to {targetLanguage}:");
+          var userPrompt = $"{(input.SourceLanguage != null ? $"The {input.SourceLanguage} " : $"The {xliffDocument.SourceLanguage}: ")}\"{String.Join(" ", xliffDocument.TranslationUnits.Select(x => x.Source))}\" was translated as " +
+            $"\"{String.Join(" ", xliffDocument.TranslationUnits.Select(x => x.Target))}\"{(input.TargetLanguage != null ? $" into {input.TargetLanguage}" : $" into {xliffDocument.TargetLanguage}")}." +
+            $"{(input.TargetAudience != null ? $" The target audience is {input.TargetAudience}" : "")}";
 
-            foreach (var unit in unitsToProcess)
-            {
-                userPrompt.AppendLine($"ID: {unit.Id}");
-                userPrompt.AppendLine($"Source: {unit.Source}");
-                userPrompt.AppendLine($"Target: {unit.Target}");
-                userPrompt.AppendLine();
-            }
-
-            if (glossary.Glossary != null)
+        if (glossary.Glossary != null)
             {
                 var glossaryPromptPart = await GetGlossaryPromptPart(glossary.Glossary, string.Join(';', unitsToProcess.Select(x => x.Source)));
                 if (!string.IsNullOrEmpty(glossaryPromptPart))
                 {
-                    userPrompt.AppendLine(glossaryPromptPart);
+                    userPrompt = userPrompt + glossaryPromptPart;
                 }
             }
 
