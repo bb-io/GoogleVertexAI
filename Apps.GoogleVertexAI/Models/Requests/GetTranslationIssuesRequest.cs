@@ -11,7 +11,7 @@ public class GetTranslationIssuesRequest
     public FileReference File { get; set; }
 
     [DataSource(typeof(AIModelDataSourceHandler))]
-    [Display("AI model used")]
+    [Display("AI model to use")]
     public required string AIModel { get; set; }
 
     [Display("Source language", Description = "Override the source language specified in the XLIFF file")]
@@ -27,6 +27,7 @@ public class GetTranslationIssuesRequest
     [StaticDataSource(typeof(XliffStateDataSourceHandler))]
     public string? ProcessOnlyTargetState { get; set; }
 
-    [Display("Update locked segments", Description = "By default it set to false. If false, OpenAI will not process the segments that are locked in the XLIFF file.")]
+    [Display("Include locked segments", Description = "By default it set to false. If false, the LLM will not process the segments that are locked in the XLIFF file.")]
     public bool? PostEditLockedSegments { get; set; }
+
 }
