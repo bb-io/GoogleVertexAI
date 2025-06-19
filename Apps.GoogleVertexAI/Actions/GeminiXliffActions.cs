@@ -21,6 +21,11 @@ using Blackbird.Applications.Sdk.Common.Exceptions;
 using Apps.GoogleVertexAI.Utils;
 using Apps.GoogleVertexAI.Models.Entities;
 using Blackbird.Xliff.Utils.Models;
+using RestSharp;
+using DocumentFormat.OpenXml.Bibliography;
+using DocumentFormat.OpenXml.Office2013.Drawing.ChartStyle;
+using DocumentFormat.OpenXml.Spreadsheet;
+using System.Runtime.Intrinsics.X86;
 
 namespace Apps.GoogleVertexAI.Actions;
 
@@ -206,7 +211,7 @@ public class GeminiXliffActions : VertexAiInvocable
         [ActionParameter] PromptRequest promptRequest,
         [ActionParameter, Display("Bucket size", Description = "Specify the number of translation units to be processed at once. Default value: 1500. (See our documentation for an explanation)")] int? bucketSize = 1500)
     {
-        if (input?.File == null)
+        if (input.File == null || string.IsNullOrEmpty(input.File.Name))
         {
             throw new PluginMisconfigurationException("The input file is empty. Please check your input and try again");
         }
@@ -291,8 +296,8 @@ public class GeminiXliffActions : VertexAiInvocable
     {
         var xliffDocument = await DownloadXliffDocumentAsync(input.File);
         var model = promptRequest.ModelEndpoint ?? input.AIModel;
-        var unitsToProcess = FilterTranslationUnits(xliffDocument.TranslationUnits, input.PostEditLockedSegments ?? false, input.ProcessOnlyTargetState);
-        
+        var unitsToProcess = FilterTranslationUnits(xliffDocument.TranslationUnits, input.PostEditLockedSegments ?? true, input.ProcessOnlyTargetState);
+
         if (!unitsToProcess.Any())
         {
             throw new PluginMisconfigurationException("No translation units match the specified criteria.");
@@ -329,7 +334,7 @@ public class GeminiXliffActions : VertexAiInvocable
         {
             var userPrompt = new StringBuilder();
             userPrompt.AppendLine($"Please analyze the following translations from {sourceLanguage} to {targetLanguage}:");
-            
+
             foreach (var unit in batch)
             {
                 userPrompt.AppendLine($"ID: {unit.Id}");
@@ -351,7 +356,7 @@ public class GeminiXliffActions : VertexAiInvocable
 
             var (response, promptUsage) = await ExecuteGeminiPrompt(promptRequest, model, userPrompt.ToString(), systemPrompt);
             usage += promptUsage;
-            
+
             try
             {
                 var batchIssues = GeminiResponseParser.ParseIssuesJson(response, InvocationContext.Logger);
@@ -376,7 +381,7 @@ public class GeminiXliffActions : VertexAiInvocable
                     $"Failed to parse the JSON response from Gemini API. Error: {ex.Message}");
             }
         }
-        
+
         string formattedIssues = XliffIssueFormatter.FormatIssues(allTranslationIssues);
         return new GetTranslationIssuesResponse
         {
@@ -385,34 +390,105 @@ public class GeminiXliffActions : VertexAiInvocable
             Usage = usage
         };
     }
-    
+
+    [Action("Get MQM report from XLIFF file", Description = "Perform an LQA Analysis of the translated XLIFF file. The result will be in the MQM framework form.")]
+    public async Task<GetMQMResponse> GetMQMReportFormXliff(
+        [ActionParameter] GetTranslationIssuesRequest input,
+        [ActionParameter] GlossaryRequest glossary,
+        [ActionParameter] PromptRequest promptRequest)
+       {
+        var xliffDocument = await DownloadXliffDocumentAsync(input.File);
+        var model = promptRequest.ModelEndpoint ?? input.AIModel;
+        var unitsToProcess = FilterTranslationUnits(xliffDocument.TranslationUnits, input.PostEditLockedSegments ?? true, input.ProcessOnlyTargetState);
+
+        if (!unitsToProcess.Any())
+        {
+            throw new PluginMisconfigurationException("No translation units match the specified criteria.");
+        }
+
+        var sourceLanguage = input.SourceLanguage ?? xliffDocument.SourceLanguage;
+        var targetLanguage = input.TargetLanguage ?? xliffDocument.TargetLanguage;
+        var allTranslationIssues = new List<XliffIssueDto>();
+        var systemPrompt = "Perform an LQA analysis and use the MQM error typology format using all 7 dimensions. " +
+                           "Here is a brief description of the seven high-level error type dimensions: " +
+                           "1. Terminology – errors arising when a term does not conform to normative domain or organizational terminology standards or when a term in the target text is not the correct, normative equivalent of the corresponding term in the source text. " +
+                           "2. Accuracy – errors occurring when the target text does not accurately correspond to the propositional content of the source text, introduced by distorting, omitting, or adding to the message. " +
+                           "3. Linguistic conventions  – errors related to the linguistic well-formedness of the text, including problems with grammaticality, spelling, punctuation, and mechanical correctness. " +
+                           "4. Style – errors occurring in a text that are grammatically acceptable but are inappropriate because they deviate from organizational style guides or exhibit inappropriate language style. " +
+                           "5. Locale conventions – errors occurring when the translation product violates locale-specific content or formatting requirements for data elements. " +
+                           "6. Audience appropriateness – errors arising from the use of content in the translation product that is invalid or inappropriate for the target locale or target audience. " +
+                           "7. Design and markup – errors related to the physical design or presentation of a translation product, including character, paragraph, and UI element formatting and markup, integration of text with graphical elements, and overall page or window layout. " +
+                           "Provide a quality rating for each dimension from 0 (completely bad) to 10 (perfect). You are an expert linguist and your task is to perform a Language Quality Assessment on input sentences. " +
+                           "Try to propose a fixed translation that would have no LQA errors. " +
+                           "Formatting: use line spacing between each category. The category name should be bold";
+
+        if (glossary.Glossary != null)
+        {
+            systemPrompt +=
+                " Use the provided glossary entries for the respective languages. If there are discrepancies " +
+                "between the translation and glossary, note them in the 'Terminology' part of the report, " +
+                "along with terminology problems not related to the glossary.";
+        }
+
+          var userPrompt = $"{(input.SourceLanguage != null ? $"The {input.SourceLanguage} " : $"The {xliffDocument.SourceLanguage}: ")}\"{String.Join(" ", xliffDocument.TranslationUnits.Select(x => x.Source))}\" was translated as " +
+            $"\"{String.Join(" ", xliffDocument.TranslationUnits.Select(x => x.Target))}\"{(input.TargetLanguage != null ? $" into {input.TargetLanguage}" : $" into {xliffDocument.TargetLanguage}")}." +
+            $"{(input.TargetAudience != null ? $" The target audience is {input.TargetAudience}" : "")}";
+
+        if (glossary.Glossary != null)
+            {
+                var glossaryPromptPart = await GetGlossaryPromptPart(glossary.Glossary, string.Join(';', unitsToProcess.Select(x => x.Source)));
+                if (!string.IsNullOrEmpty(glossaryPromptPart))
+                {
+                    userPrompt = userPrompt + glossaryPromptPart;
+                }
+            }
+
+        string response = "";
+        var promptUsage = new UsageDto();
+
+        try 
+        {
+            (response, promptUsage) = await ExecuteGeminiPrompt(promptRequest, model, userPrompt.ToString(), systemPrompt);
+        }
+        catch (Exception e)
+        {
+            throw new PluginApplicationException(e.Message);
+        }
+          return new GetMQMResponse 
+        {
+            Report = response,
+            Usage = promptUsage
+        }; 
+        
+    }
+
     private string BuildPlainTextSummary(IEnumerable<TranslationUnit> units, string issuesText)
     {
         var summary = new StringBuilder();
         summary.AppendLine("Here is an analysis of the provided translations:");
         summary.AppendLine();
-        
+
         // Try to extract issues by ID from the text
         foreach (var unit in units)
         {
             var idPattern = $@"(?:ID:|id:)[^\d]*{unit.Id}\b";
             var idMatch = Regex.Match(issuesText, idPattern, RegexOptions.IgnoreCase);
-            
+
             if (idMatch.Success)
             {
                 var startIndex = idMatch.Index;
                 var nextIdMatch = Regex.Match(issuesText.Substring(startIndex + 1), @"(?:ID:|id:)[^\d]*\d+\b", RegexOptions.IgnoreCase);
-                var endIndex = nextIdMatch.Success 
-                    ? startIndex + 1 + nextIdMatch.Index 
+                var endIndex = nextIdMatch.Success
+                    ? startIndex + 1 + nextIdMatch.Index
                     : issuesText.Length;
-                
+
                 var issueContent = issuesText.Substring(startIndex, endIndex - startIndex).Trim();
-                
+
                 summary.AppendLine($"**ID: {unit.Id}**");
                 summary.AppendLine($"*   Source: `{unit.Source}`");
                 summary.AppendLine($"*   Target: `{unit.Target}`");
                 summary.AppendLine($"*   **Issue(s) identified:**");
-                
+
                 var issueLines = issueContent.Split('\n').Skip(1); // Skip the ID line
                 foreach (var line in issueLines)
                 {
@@ -421,11 +497,11 @@ public class GeminiXliffActions : VertexAiInvocable
                         summary.AppendLine($"    *   {line.Trim()}");
                     }
                 }
-                
+
                 summary.AppendLine();
             }
         }
-        
+
         return summary.ToString();
     }
 

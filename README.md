@@ -70,6 +70,8 @@ Before you can connect you need to make sure that:
 
 - **Process XLIFF file** given an XLIFF file, processes each translation unit according to provided instructions (default is to translate source tags) and updates the target text for each unit.
 
+- **Get MQM report from XLIFF file** Perform an LQA Analysis of the translated XLIFF file. The result will be in the MQM framework form.
+
 - **Get translation issues from XLIFF file** Analyzes an XLIFF file to identify translation issues between source and target texts
 
 Note, that all XLIFF actions supports 1.2 and 2.1 versions of the XLIFF format, since these versions are the most commonly used in the industry. If you have a different version, please let us know and we will consider adding support for it.
