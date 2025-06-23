@@ -395,7 +395,8 @@ public class GeminiXliffActions : VertexAiInvocable
     public async Task<GetMQMResponse> GetMQMReportFormXliff(
         [ActionParameter] GetTranslationIssuesRequest input,
         [ActionParameter] GlossaryRequest glossary,
-        [ActionParameter] PromptRequest promptRequest)
+        [ActionParameter] PromptRequest promptRequest,
+        [ActionParameter] [Display("Additional prompt instructions")]string? AdditionalPrompt)
        {
         var xliffDocument = await DownloadXliffDocumentAsync(input.File);
         var model = promptRequest.ModelEndpoint ?? input.AIModel;
@@ -420,14 +421,19 @@ public class GeminiXliffActions : VertexAiInvocable
                            "7. Design and markup – errors related to the physical design or presentation of a translation product, including character, paragraph, and UI element formatting and markup, integration of text with graphical elements, and overall page or window layout. " +
                            "Provide a quality rating for each dimension from 0 (completely bad) to 10 (perfect). You are an expert linguist and your task is to perform a Language Quality Assessment on input sentences. " +
                            "Try to propose a fixed translation that would have no LQA errors. " +
-                           "Formatting: use line spacing between each category. The category name should be bold";
+                           "Formatting: use line spacing between each category. The category name should be bold. ";
 
         if (glossary.Glossary != null)
         {
             systemPrompt +=
-                " Use the provided glossary entries for the respective languages. If there are discrepancies " +
+                "Use the provided glossary entries for the respective languages. If there are discrepancies " +
                 "between the translation and glossary, note them in the 'Terminology' part of the report, " +
-                "along with terminology problems not related to the glossary.";
+                "along with terminology problems not related to the glossary. ";
+        }
+
+        if (!String.IsNullOrEmpty(AdditionalPrompt))
+        {
+            systemPrompt += AdditionalPrompt;
         }
 
           var userPrompt = $"{(input.SourceLanguage != null ? $"The {input.SourceLanguage} " : $"The {xliffDocument.SourceLanguage}: ")}\"{String.Join(" ", xliffDocument.TranslationUnits.Select(x => x.Source))}\" was translated as " +
@@ -457,7 +463,8 @@ public class GeminiXliffActions : VertexAiInvocable
           return new GetMQMResponse 
         {
             Report = response,
-            Usage = promptUsage
+            Usage = promptUsage,
+            SystemPrompt = systemPrompt
         }; 
         
     }
