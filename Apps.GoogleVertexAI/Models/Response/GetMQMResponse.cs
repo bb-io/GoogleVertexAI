@@ -8,5 +8,8 @@ namespace Apps.GoogleVertexAI.Models.Response
         [Display("MQM report")]
         public string Report { get; set; }
         public UsageDto Usage { get; set; } = new();
+
+        [Display("System prompt used")]
+        public string SystemPrompt { get; set; }
     }
 }
