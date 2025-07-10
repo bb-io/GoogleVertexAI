@@ -14,7 +14,7 @@ using Apps.GoogleVertexAI.Models.Requests;
 
 namespace Apps.GoogleVertexAI.Actions;
 
-[ActionList]
+[ActionList("Generation")]
 public class GeminiGenerateActions : VertexAiInvocable
 {
     private readonly IFileManagementClient _fileManagementClient;
@@ -25,7 +25,7 @@ public class GeminiGenerateActions : VertexAiInvocable
         _fileManagementClient = fileManagementClient;
     }
 
-    [Action("Generate text with Gemini", Description = "Generate text using Gemini. Text generation based on a " +
+    [Action("Generate text", Description = "Generate text using Gemini. Text generation based on a " +
                                                        "single prompt is executed with the chosen" +
                                                        " model.")]
     public async Task<GeneratedTextResponse> GenerateText([ActionParameter] GenerateTextRequest input)
@@ -89,7 +89,7 @@ public class GeminiGenerateActions : VertexAiInvocable
         }
     }
 
-    [Action("Generate text from file with Gemini", Description = $"Generate text using Gemini. " +
+    [Action("Generate text from file", Description = $"Generate text using Gemini. The input can take an additional file. " +
                                                    "Generation will be performed with the chosen" +
                                                    " model.")]
     public async Task<GeneratedTextResponse> GenerateTextFromFile([ActionParameter] GenerateTextFromFileRequest input)
