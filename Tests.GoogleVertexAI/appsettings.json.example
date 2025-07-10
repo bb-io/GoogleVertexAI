@@ -1,6 +1,7 @@
 {
     "ConnectionDefinition": {
-        "ServiceAccountConfString": ""
+      "ServiceAccountConfString": "",
+      "Region": ""
     },
     "TestFolder": ""
 }

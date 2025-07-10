@@ -17,8 +17,8 @@ public class PostEditXliffRequest
     [Display("Target language")]
     public string? TargetLanguage { get; set; }
 
-    [DataSource(typeof(AIModelDataSourceHandler))]
-    [Display("AI model used")]
+    [StaticDataSource(typeof(AIModelDataSourceHandler))]
+    [Display("Model")]
     public required string AIModel { get; set; }
 
     [Display("Process only segments with this state", Description = "Only translation units with this value in the target state will be processed")]

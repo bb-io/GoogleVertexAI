@@ -10,7 +10,7 @@ public class GetTranslationIssuesRequest
 {
     public FileReference File { get; set; }
 
-    [DataSource(typeof(AIModelDataSourceHandler))]
+    [StaticDataSource(typeof(AIModelDataSourceHandler))]
     [Display("AI model to use")]
     public required string AIModel { get; set; }
 

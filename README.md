@@ -6,7 +6,7 @@ Blackbird is the new automation backbone for the language technology industry. B
 
 <!-- begin docs -->
 
-Google Gemini AI is a comprehensive platform offering access to powerful multimodal models like Gemini from Google, enabling developers to seamlessly combine various inputs such as text, images, video, or code. With a diverse selection of models, Vertex AI facilitates easy customization and integration, allowing for the development and deployment of AI applications. The platform provides generative AI models, fully managed tools, and purpose-built MLOps solutions to streamline the entire machine learning lifecycle—from training and tuning to deployment and monitoring.
+Gemini is a cutting-edge, multimodal AI from Google, capable of reasoning across various media, driving chatbots, search enhancements, productivity tools, and device-level interactions.
 
 ## Before setting up
 
@@ -32,7 +32,7 @@ Before you can connect you need to make sure that:
 
 ## Connecting
 
-1. Navigate to apps and search for Google Vertex AI. If you cannot find Google Vertex AI then click _Add App_ in the top right corner, select Google Vertex AI and add the app to your Blackbird environment.
+1. Navigate to apps and search for Google Gemini AI. If you cannot find Google Gemini AI then click _Add App_ in the top right corner, select Google Gemini AI and add the app to your Blackbird environment.
 2. Click _Add Connection_.
 3. Name your connection for future reference e.g. 'My organization'.
 4. Fill in the JSON configuration string obtained in the previous step.
@@ -44,7 +44,23 @@ Before you can connect you need to make sure that:
 
 ## Actions
 
-- **Generate text with Gemini** generates text using Gemini model. If text generation is based on a single prompt, it's executed with the gemini-1.0-pro model. Optionally, you can specify an image or video to perform generation with the gemini-1.0-pro-vision model. Both image and video have a size limit of 20 MB. If an image is already present, video cannot be specified and vice versa. Supported image formats are PNG and JPEG, while video formats include MOV, MPEG, MP4, MPG, AVI, WMV, MPEGPS, and FLV. Optionally, set _Is Blackbird prompt_ to _True_ to indicate that the prompt given to the action is the result of one of AI Utilities app's actions. You can also specify safety categories in the _Safety categories_ input parameter and respective thresholds for them in the _Thresholds for safety categories_ input parameter. If one list has more items than the other, extra ones are ignored.
+### Generation
+
+- **Generate text** generates text using Gemini model. If text generation is based on a single prompt, it's executed with the gemini-1.0-pro model. Optionally, you can specify an image or video to perform generation with the gemini-1.0-pro-vision model. Both image and video have a size limit of 20 MB. If an image is already present, video cannot be specified and vice versa. Supported image formats are PNG and JPEG, while video formats include MOV, MPEG, MP4, MPG, AVI, WMV, MPEGPS, and FLV. Optionally, set _Is Blackbird prompt_ to _True_ to indicate that the prompt given to the action is the result of one of AI Utilities app's actions. You can also specify safety categories in the _Safety categories_ input parameter and respective thresholds for them in the _Thresholds for safety categories_ input parameter. If one list has more items than the other, extra ones are ignored.
+
+- **Generate text from file** the input can take an additional file.
+
+### Translation
+
+- **Translate** translate file content retrieved from a CMS or file storage. The output can be used in compatible Blackbird interoperable actions.
+- **Translate text** given a text and a locale, tries to create a localized version of the text.
+
+### Editing
+
+- **Edit** Edit a translation. This action assumes you have previously translated content in Blackbird through any translation action. Only looks at translated segments and will change the segment state to reviewed.
+- **Edit Text** given a source segment and translated target segment, responds with an edited version of the target segment taking into account typical mistakes.
+
+### Deprecated XLIFF
 
 - **Get Quality Scores for XLIFF file** Gets segment and file level quality scores for XLIFF files. Optionally, you can add Threshold, New Target State and Condition input parameters to the Blackbird action to change the target state value of segments meeting the desired criteria (all three must be filled).
 

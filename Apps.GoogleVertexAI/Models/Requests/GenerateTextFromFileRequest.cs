@@ -20,7 +20,7 @@ public class GenerateTextFromFileRequest : PromptRequest
     public FileReference File { get; set; }
 
     [DataSource(typeof(AIModelWithFileDataSourceHandler))]
-    [Display("AI model used")]
+    [Display("Model")]
     public required string AIModel { get; set; }
 
 }
