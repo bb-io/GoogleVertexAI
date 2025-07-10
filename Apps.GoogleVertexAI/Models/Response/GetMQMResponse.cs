@@ -5,7 +5,7 @@ namespace Apps.GoogleVertexAI.Models.Response
 {
     public class GetMQMResponse
     {
-        [Display("MQM report")]
+        [Display("Report")]
         public string Report { get; set; }
         public UsageDto Usage { get; set; } = new();
 

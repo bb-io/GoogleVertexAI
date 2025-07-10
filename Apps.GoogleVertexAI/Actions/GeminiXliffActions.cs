@@ -396,7 +396,8 @@ public class GeminiXliffActions : VertexAiInvocable
         [ActionParameter] GetTranslationIssuesRequest input,
         [ActionParameter] GlossaryRequest glossary,
         [ActionParameter] PromptRequest promptRequest,
-        [ActionParameter] [Display("Additional prompt instructions")]string? AdditionalPrompt)
+        [ActionParameter] [Display("Additional prompt instructions")]string? AdditionalPrompt,
+        [ActionParameter] [Display("System prompt (fully replaces MQM instructions")] string? customSystemPrompt)
        {
         var xliffDocument = await DownloadXliffDocumentAsync(input.File);
         var model = promptRequest.ModelEndpoint ?? input.AIModel;
@@ -410,7 +411,7 @@ public class GeminiXliffActions : VertexAiInvocable
         var sourceLanguage = input.SourceLanguage ?? xliffDocument.SourceLanguage;
         var targetLanguage = input.TargetLanguage ?? xliffDocument.TargetLanguage;
         var allTranslationIssues = new List<XliffIssueDto>();
-        var systemPrompt = "Perform an LQA analysis and use the MQM error typology format using all 7 dimensions. " +
+        var systemPrompt = String.IsNullOrEmpty(customSystemPrompt) ?"Perform an LQA analysis and use the MQM error typology format using all 7 dimensions. " +
                            "Here is a brief description of the seven high-level error type dimensions: " +
                            "1. Terminology – errors arising when a term does not conform to normative domain or organizational terminology standards or when a term in the target text is not the correct, normative equivalent of the corresponding term in the source text. " +
                            "2. Accuracy – errors occurring when the target text does not accurately correspond to the propositional content of the source text, introduced by distorting, omitting, or adding to the message. " +
@@ -421,7 +422,7 @@ public class GeminiXliffActions : VertexAiInvocable
                            "7. Design and markup – errors related to the physical design or presentation of a translation product, including character, paragraph, and UI element formatting and markup, integration of text with graphical elements, and overall page or window layout. " +
                            "Provide a quality rating for each dimension from 0 (completely bad) to 10 (perfect). You are an expert linguist and your task is to perform a Language Quality Assessment on input sentences. " +
                            "Try to propose a fixed translation that would have no LQA errors. " +
-                           "Formatting: use line spacing between each category. The category name should be bold. ";
+                           "Formatting: use line spacing between each category. The category name should be bold. " : customSystemPrompt;
 
         if (glossary.Glossary != null)
         {
