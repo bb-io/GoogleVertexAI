@@ -33,7 +33,7 @@ public class EditActions(InvocationContext invocationContext, IFileManagementCli
         [ActionParameter, Display("Bucket size", Description = "Specify the number of source texts to be translated at once. Default value: 1500. (See our documentation for an explanation)")] int? bucketSize = null)
     {
         var batchSize = bucketSize ?? 1500;
-        var model = promptRequest.ModelEndpoint ?? input.AIModel;
+        var model = input.AIModel;
         var result = new FileEditResponse();
         var stream = await fileManagementClient.DownloadAsync(input.File);
         var content = await Transformation.Parse(stream, input.File.Name);
@@ -165,7 +165,7 @@ public class EditActions(InvocationContext invocationContext, IFileManagementCli
         [ActionParameter, Display("Additional instructions", Description = "Specify additional instructions to be applied to the translation. For example, 'Cater to an older audience.'")] string? prompt,
         [ActionParameter] GlossaryRequest glossary)
     {
-        var model = promptRequest.ModelEndpoint ?? input.AIModel;
+        var model = input.AIModel;
         var systemPrompt =
             $"You are receiving a source text{(input.SourceLanguage != null ? $" written in {input.SourceLanguage} " : "")}" +
             $"that was translated into target text{(input.TargetLanguage != null ? $" written in {input.TargetLanguage}" : "")}. " +

@@ -26,7 +26,7 @@ public class GeminiXliffActionsTests : TestBase
         
         var instructionsPrompt = "You are a human translator native in the target language identified in the file. Translate the text from the source language identified in the file to the target language identified in the file. Ensure that any tags included in the source language are replicated in the target language. Ensure the output is provided in valid XML/XLIFF format, similar to the input file format.";
             
-        var modelRequest = new PromptRequest { ModelEndpoint = ModelName };
+        var modelRequest = new PromptRequest {  };
         
         // Act
         var result = await action.ScoreXLIFF(scoreRequest, instructionsPrompt, modelRequest);
@@ -50,7 +50,7 @@ public class GeminiXliffActionsTests : TestBase
         };
 
         var customPrompt = "You are a human translator native in the target language identified in the file. Translate the text from the source language identified in the file to the target language identified in the file. Ensure that any tags included in the source language are replicated in the target language. Ensure the output is provided in valid XML/XLIFF format, similar to the input file format.";
-        var modelRequest = new PromptRequest { ModelEndpoint = ModelName };
+        var modelRequest = new PromptRequest { };
         var glossaryRequest = new GlossaryRequest();
 
         // Act
@@ -75,7 +75,7 @@ public class GeminiXliffActionsTests : TestBase
             TargetAudience = "General public"
         };
         
-        var modelRequest = new PromptRequest { ModelEndpoint = ModelName };
+        var modelRequest = new PromptRequest {};
         var glossaryRequest = new GlossaryRequest();
         
         // Act

@@ -47,7 +47,7 @@ public class GeminiXliffActions : VertexAiInvocable
     {
         var xliffDocument = await DownloadXliffDocumentAsync(input.File);
 
-        var model = promptRequest.ModelEndpoint ?? input.AIModel;
+        var model = input.AIModel;
         var systemPrompt = GetSystemPrompt(string.IsNullOrEmpty(prompt));
         var list = xliffDocument.TranslationUnits.Select(x => x.Source).ToList();
 
@@ -82,7 +82,7 @@ public class GeminiXliffActions : VertexAiInvocable
         int? bucketSize = 1500)
     {
         var xliffDocument = await DownloadXliffDocumentAsync(input.File);
-        var model = promptRequest.ModelEndpoint ?? input.AIModel;
+        var model = input.AIModel;
         var criteriaPrompt = string.IsNullOrEmpty(prompt)
             ? "accuracy, fluency, consistency, style, grammar and spelling"
             : prompt;
@@ -214,7 +214,7 @@ public class GeminiXliffActions : VertexAiInvocable
         var xliffDocument = await DownloadXliffDocumentAsync(input.File);
         var realBucketSize = bucketSize ?? 1500;
 
-        var model = promptRequest.ModelEndpoint ?? input.AIModel;
+        var model = input.AIModel;
         var results = new Dictionary<string, string>();
 
         var unitsToProcess = FilterTranslationUnits(xliffDocument.TranslationUnits, input.PostEditLockedSegments ?? false, input.ProcessOnlyTargetState);
@@ -290,7 +290,7 @@ public class GeminiXliffActions : VertexAiInvocable
         [ActionParameter, Display("Bucket size", Description = "Specify the number of translation units to be processed at once. Default value: 1500. (See our documentation for an explanation)")] int? bucketSize = 1500)
     {
         var xliffDocument = await DownloadXliffDocumentAsync(input.File);
-        var model = promptRequest.ModelEndpoint ?? input.AIModel;
+        var model = input.AIModel;
         var unitsToProcess = FilterTranslationUnits(xliffDocument.TranslationUnits, input.PostEditLockedSegments ?? true, input.ProcessOnlyTargetState);
 
         if (!unitsToProcess.Any())
@@ -395,7 +395,7 @@ public class GeminiXliffActions : VertexAiInvocable
         [ActionParameter] [Display("System prompt (fully replaces MQM instructions)")] string? customSystemPrompt)
        {
         var xliffDocument = await DownloadXliffDocumentAsync(input.File);
-        var model = promptRequest.ModelEndpoint ?? input.AIModel;
+        var model = input.AIModel;
         var unitsToProcess = FilterTranslationUnits(xliffDocument.TranslationUnits, input.PostEditLockedSegments ?? true, input.ProcessOnlyTargetState);
 
         if (!unitsToProcess.Any())

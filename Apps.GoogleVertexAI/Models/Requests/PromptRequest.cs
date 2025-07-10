@@ -49,8 +49,4 @@ public class PromptRequest
                                                                "the 'Safety categories' input parameter.")]
     [StaticDataSource(typeof(SafetyCategoryThresholdDataSourceHandler))]
     public IEnumerable<string>? SafetyCategoryThresholds { get; set; }
-    
-    [Display("Model endpoint")]
-    [StaticDataSource(typeof(AIModelDataSourceHandler))]
-    public string? ModelEndpoint { get; set; }
 }

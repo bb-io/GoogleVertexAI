@@ -33,7 +33,7 @@ public class TranslationActions(InvocationContext invocationContext, IFileManage
         [ActionParameter, Display("Bucket size", Description = "Specify the number of source texts to be translated at once. Default value: 1500. (See our documentation for an explanation)")] int? bucketSize = null)
     {
         var batchSize = bucketSize ?? 1500;
-        var model = promptRequest.ModelEndpoint ?? input.AIModel;
+        var model = input.AIModel;
         var result = new FileTranslationResponse();
         var stream = await fileManagementClient.DownloadAsync(input.File);
         var content = await Transformation.Parse(stream, input.File.Name);
@@ -208,7 +208,7 @@ public class TranslationActions(InvocationContext invocationContext, IFileManage
         [ActionParameter, Display("Additional instructions", Description = "Specify additional instructions to be applied to the translation. For example, 'Cater to an older audience.'")] string? prompt,
         [ActionParameter] GlossaryRequest glossary)
     {
-        var model = promptRequest.ModelEndpoint ?? input.AIModel;
+        var model = input.AIModel;
         var systemPrompt = "You are a text localizer. Localize the provided text for the specified locale while " +
                            $"preserving the original text structure. Respond with localized text. {prompt}";
 

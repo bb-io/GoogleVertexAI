@@ -45,7 +45,7 @@ public class GeminiGenerateActions : VertexAiInvocable
         .First(p => p.KeyName == CredNames.Region)
         .Value;
 
-        var endpoint = input.ModelEndpoint ?? EndpointName
+        var endpoint = input.AIModel ?? EndpointName
             .FromProjectLocationPublisherModel(ProjectId, region, PublisherIds.Google, input.AIModel)
             .ToString();
 
@@ -118,7 +118,7 @@ public class GeminiGenerateActions : VertexAiInvocable
                     })
             : Enumerable.Empty<SafetySetting>();
 
-        var endpoint = input.ModelEndpoint ?? EndpointName
+        var endpoint = input.AIModel ?? EndpointName
             .FromProjectLocationPublisherModel(ProjectId, Region, PublisherIds.Google, input.AIModel)
             .ToString();
 

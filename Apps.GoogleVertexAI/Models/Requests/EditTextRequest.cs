@@ -22,7 +22,7 @@ public class EditTextRequest : IEditTextInput
     public string TargetLanguage { get; set; }
 
     [StaticDataSource(typeof(AIModelDataSourceHandler))]
-    [Display("AI model used")]
+    [Display("Model")]
     public required string AIModel { get; set; }
 
 }

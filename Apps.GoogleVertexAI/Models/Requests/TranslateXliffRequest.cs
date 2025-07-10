@@ -11,7 +11,7 @@ public class TranslateXliffRequest
     public FileReference File { get; set; }
 
     [StaticDataSource(typeof(AIModelDataSourceHandler))]
-    [Display("AI model used")]
+    [Display("Model")]
     public required string AIModel { get; set; }
 
     [Display("Process only segments with this state", Description = "Only translation units with this value in the target state will be processed")]
