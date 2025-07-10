@@ -397,7 +397,7 @@ public class GeminiXliffActions : VertexAiInvocable
         [ActionParameter] GlossaryRequest glossary,
         [ActionParameter] PromptRequest promptRequest,
         [ActionParameter] [Display("Additional prompt instructions")]string? AdditionalPrompt,
-        [ActionParameter] [Display("System prompt (fully replaces MQM instructions")] string? customSystemPrompt)
+        [ActionParameter] [Display("System prompt (fully replaces MQM instructions)")] string? customSystemPrompt)
        {
         var xliffDocument = await DownloadXliffDocumentAsync(input.File);
         var model = promptRequest.ModelEndpoint ?? input.AIModel;
