@@ -1,8 +1,9 @@
-﻿using Blackbird.Applications.Sdk.Common.Dynamic;
+﻿using Blackbird.Applications.Sdk.Common.Dictionaries;
+using Blackbird.Applications.Sdk.Common.Dynamic;
 
 namespace Apps.GoogleVertexAI.DataSourceHandlers.Static;
 
-public class AIModelDataSourceHandler : IDataSourceItemHandler
+public class AIModelDataSourceHandler : IStaticDataSourceItemHandler
 {
     private static readonly Dictionary<string, string> Data = new()
     {
@@ -20,7 +21,7 @@ public class AIModelDataSourceHandler : IDataSourceItemHandler
         { "gemini-2.0-flash-lite-001", "Gemini 2.0 Flash-Lite 001" }
     };
     
-    public IEnumerable<DataSourceItem> GetData(DataSourceContext context)
+    public IEnumerable<DataSourceItem> GetData()
     {
         return Data.Select(x => new DataSourceItem(x.Key, x.Value));
     }

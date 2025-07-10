@@ -10,7 +10,7 @@ public class TranslateXliffRequest
 {
     public FileReference File { get; set; }
 
-    [DataSource(typeof(AIModelDataSourceHandler))]
+    [StaticDataSource(typeof(AIModelDataSourceHandler))]
     [Display("AI model used")]
     public required string AIModel { get; set; }
 

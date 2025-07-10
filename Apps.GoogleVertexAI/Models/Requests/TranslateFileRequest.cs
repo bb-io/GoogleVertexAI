@@ -19,7 +19,7 @@ public class TranslateFileRequest : ITranslateFileInput
     [StaticDataSource(typeof(LocaleDataSourceHandler))]
     public string TargetLanguage { get; set; }
 
-    [DataSource(typeof(AIModelDataSourceHandler))]
+    [StaticDataSource(typeof(AIModelDataSourceHandler))]
     [Display("AI model used")]
     public required string AIModel { get; set; }
 
