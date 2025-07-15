@@ -9,7 +9,7 @@ namespace Tests.GoogleVertexAI;
 [TestClass]
 public class GeminiGenerateActionsTests : TestBase
 {
-    private const string ModelName = "gemini-2.5-pro-exp-03-25";
+    private const string ModelName = "gemini-2.5-pro";
     
     [TestMethod]
     public async Task GenerateText_WithValidPrompt_ReturnsNonEmptyResponse()
