@@ -1,4 +1,5 @@
 ﻿using Apps.GoogleVertexAI.Constants;
+using Apps.GoogleVertexAI.Utils;
 using Blackbird.Applications.Sdk.Common.Authentication;
 using Blackbird.Applications.Sdk.Utils.Extensions.Sdk;
 using Google.Cloud.AIPlatform.V1;
@@ -16,10 +17,11 @@ public static class ClientFactory
              ? "https://aiplatform.googleapis.com"
              : $"https://{region}-aiplatform.googleapis.com";
 
-        return new PredictionServiceClientBuilder
+        return ErrorHandler.ExecuteWithErrorHandling(() =>
+        new PredictionServiceClientBuilder
         {
             JsonCredentials = jsonConfiguration,
             Endpoint = apiUrl
-        }.Build();
+        }.Build());
     }
 }
