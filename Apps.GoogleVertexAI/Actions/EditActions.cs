@@ -1,10 +1,8 @@
 ﻿using Apps.GoogleVertexAI.Invocables;
 using Apps.GoogleVertexAI.Models.Requests;
 using Apps.GoogleVertexAI.Models.Response;
-using Apps.GoogleVertexAI.Utils;
 using Blackbird.Applications.Sdk.Common;
 using Blackbird.Applications.Sdk.Common.Actions;
-using Blackbird.Applications.Sdk.Common.Exceptions;
 using Blackbird.Applications.Sdk.Common.Files;
 using Blackbird.Applications.Sdk.Common.Invocation;
 using Blackbird.Applications.Sdk.Glossaries.Utils.Converters;

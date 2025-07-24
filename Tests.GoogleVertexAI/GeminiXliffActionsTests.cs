@@ -9,7 +9,7 @@ namespace Tests.GoogleVertexAI;
 [TestClass]
 public class GeminiXliffActionsTests : TestBase
 {
-    private const string ModelName = "gemini-2.5-pro-exp-03-25";
+    private const string ModelName = "gemini-2.5-pro";
     private const string TestFileName = "test.xliff";
     
     [TestMethod]

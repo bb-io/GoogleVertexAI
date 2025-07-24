@@ -10,24 +10,24 @@ namespace Tests.GoogleVertexAI;
 public class GeminiGenerateActionsTests : TestBase
 {
     private const string ModelName = "gemini-2.5-pro";
-    
+
+    private GeminiGenerateActions Actions => new(InvocationContext, FileManager);
+
     [TestMethod]
     public async Task GenerateText_WithValidPrompt_ReturnsNonEmptyResponse()
     {
         // Arrange
-        var action = new GeminiGenerateActions(InvocationContext, FileManager);
         var request = new GenerateTextRequest 
         { 
             AIModel = ModelName, 
-            Prompt = "Explain what is sun?" 
+            Prompt = "Explain in one sentence what is sun?" 
         };
 
         // Act
-        var response = await action.GenerateText(request);
+        var response = await Actions.GenerateText(request, new PromptRequest());
         
         // Assert
         Console.WriteLine(response.GeneratedText);
-        Assert.IsNotNull(response);
         Assert.IsFalse(string.IsNullOrEmpty(response.GeneratedText));
     }
 
@@ -35,7 +35,6 @@ public class GeminiGenerateActionsTests : TestBase
     public async Task GenerateTextFromFile_WithValidFileAndPrompt_ReturnsNonEmptyResponse()
     {
         // Arrange
-        var action = new GeminiGenerateActions(InvocationContext, FileManager);
         var fileReference = new FileReference
         {
             Name = "test.xliff", 
@@ -45,16 +44,15 @@ public class GeminiGenerateActionsTests : TestBase
         var request = new GenerateTextFromFileRequest 
         { 
             AIModel = ModelName,
-            File = fileReference,
-            Prompt = "what is that file about"
+            Files = [fileReference],
+            Prompt = "What is that file about? Explain in one sentence"
         };
 
         // Act
-        var response = await action.GenerateTextFromFile(request);
+        var response = await Actions.GenerateTextFromFile(request, new PromptRequest());
         
         // Assert
         Console.WriteLine(response.GeneratedText);
-        Assert.IsNotNull(response);
         Assert.IsFalse(string.IsNullOrEmpty(response.GeneratedText));
     }
 }
