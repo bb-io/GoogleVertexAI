@@ -9,7 +9,7 @@ public class GenerateTextFromFileRequest : PromptRequest
 {
     public string Prompt { get; set; } = string.Empty;
 
-    [Display("File", Description = "Image in PNG or JPEG format with a size limit of 20 MB." +
+    [Display("Files", Description = "Image in PNG or JPEG format with a size limit of 20 MB." +
                                     "Video in any of the following formats: MOV, MPEG, MP4, MPG, AVI, WMV, " +
                                     "MPEGPS, FLV, with a size limit of 20 MB.")]
     public IEnumerable<FileReference> Files { get; set; } = [];
