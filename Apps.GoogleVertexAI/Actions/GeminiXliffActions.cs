@@ -1,7 +1,6 @@
 using System.Net.Mime;
 using System.Text;
 using System.Text.RegularExpressions;
-using Apps.GoogleVertexAI.Constants;
 using Apps.GoogleVertexAI.Invocables;
 using Apps.GoogleVertexAI.Models.Dto;
 using Apps.GoogleVertexAI.Models.Requests;
@@ -14,7 +13,6 @@ using Blackbird.Applications.SDK.Extensions.FileManagement.Interfaces;
 using Blackbird.Applications.Sdk.Glossaries.Utils.Converters;
 using Blackbird.Xliff.Utils;
 using Blackbird.Xliff.Utils.Extensions;
-using Google.Cloud.AIPlatform.V1;
 using MoreLinq;
 using Newtonsoft.Json;
 using Blackbird.Applications.Sdk.Common.Exceptions;

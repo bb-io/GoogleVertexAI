@@ -44,9 +44,12 @@ public class VertexAiInvocable : BaseInvocable
         return result;
     }
 
-    protected async Task<(string result, UsageDto usage)> ExecuteGeminiPrompt(PromptRequest input, string modelId,
+    protected async Task<(string result, UsageDto usage)> ExecuteGeminiPrompt(
+        PromptRequest input,
+        string modelId,
         string prompt,
-        string? systemPrompt = null)
+        string? systemPrompt = null,
+        IEnumerable<Part>? files = null)
     {
         var endpoint = EndpointName
             .FromProjectLocationPublisherModel(ProjectId, Region, PublisherIds.Google, modelId)
@@ -57,6 +60,14 @@ public class VertexAiInvocable : BaseInvocable
             Role = "USER",
             Parts = { new Part { Text = prompt } }
         };
+
+        if (files is not null )
+        {
+            foreach (var file in files)
+            {
+                content.Parts.Add(file);
+            }
+        }
 
         var safetySettings = input is { SafetyCategories: not null, SafetyCategoryThresholds: not null }
             ? input.SafetyCategories
