@@ -1,6 +1,6 @@
 ﻿using Apps.GoogleVertexAI.DataSourceHandlers.Static;
 using Blackbird.Applications.Sdk.Common;
-using Blackbird.Applications.Sdk.Common.Dynamic;
+using Blackbird.Applications.Sdk.Common.Dictionaries;
 using Blackbird.Applications.Sdk.Common.Files;
 
 namespace Apps.GoogleVertexAI.Models.Requests;
@@ -14,8 +14,8 @@ public class GenerateTextFromFileRequest : PromptRequest
                                     "MPEGPS, FLV, with a size limit of 20 MB.")]
     public IEnumerable<FileReference> Files { get; set; } = [];
 
-    [DataSource(typeof(AIModelDataSourceHandler))]
     [Display("Model")]
+    [StaticDataSource(typeof(AIModelDataSourceHandler))]
     public required string AIModel { get; set; }
 
     [Display("Is Blackbird prompt", Description = "Parameter indicating whether the input prompt is the output " +
