@@ -12,7 +12,7 @@ public class GenerateTextRequest : PromptRequest
                                                   "of one of the AI Utilities app's actions; defaults to 'False'.")]
     public bool? IsBlackbirdPrompt { get; set; }
 
-    [StaticDataSource(typeof(AIModelDataSourceHandler))]
     [Display("Model")]
+    [StaticDataSource(typeof(AIModelDataSourceHandler))]
     public required string AIModel { get; set; }
 }
