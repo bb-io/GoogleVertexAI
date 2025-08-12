@@ -9,6 +9,7 @@ using Blackbird.Applications.Sdk.Common.Exceptions;
 using Blackbird.Applications.Sdk.Common.Invocation;
 using Blackbird.Applications.Sdk.Utils.Extensions.Sdk;
 using Google.Cloud.AIPlatform.V1;
+using Google.Cloud.Storage.V1;
 using Newtonsoft.Json;
 using System.Text;
 
@@ -17,6 +18,8 @@ namespace Apps.GoogleVertexAI.Invocables;
 public class VertexAiInvocable : BaseInvocable
 {
     protected readonly PredictionServiceClient Client;
+    protected readonly JobServiceClient JobClient;
+    protected readonly StorageClient Storage;
     protected readonly string ProjectId;
     protected readonly string Region;
 
@@ -27,6 +30,9 @@ public class VertexAiInvocable : BaseInvocable
     {
         Region = invocationContext.AuthenticationCredentialsProviders.Get(CredNames.Region).Value;
         Client = ClientFactory.Create(invocationContext.AuthenticationCredentialsProviders,Region);
+        JobClient = ClientFactory.CreateJobService(invocationContext.AuthenticationCredentialsProviders, Region);
+        Storage = ClientFactory.CreateStorage(invocationContext.AuthenticationCredentialsProviders);
+
         var serviceConfig = JsonConvert.DeserializeObject<ServiceAccountConfig>(invocationContext.AuthenticationCredentialsProviders.Get(CredNames.ServiceAccountConfString).Value);
         if (serviceConfig == null) throw new Exception("The service config string was not properly formatted");
         ProjectId = serviceConfig.ProjectId;

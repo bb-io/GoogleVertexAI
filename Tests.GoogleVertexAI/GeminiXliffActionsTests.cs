@@ -1,6 +1,7 @@
 ﻿using Apps.GoogleVertexAI.Actions;
 using Apps.GoogleVertexAI.Models.Requests;
 using Blackbird.Applications.Sdk.Common.Files;
+using DocumentFormat.OpenXml.Wordprocessing;
 using GoogleVertexAI.Base;
 using Newtonsoft.Json;
 
@@ -93,5 +94,59 @@ public class GeminiXliffActionsTests : TestBase
         Assert.IsNotNull(result.Usage);
         Console.WriteLine($"Issues analysis length: {result.TranslationIssues.Count}");
         Console.WriteLine(JsonConvert.SerializeObject(result.TranslationIssues, Formatting.Indented));
+    }
+
+
+
+    [TestMethod]
+    public async Task StartXliffBatchTranslation_WithValidInputs_ReturnsTranslatedDocument()
+    {
+        // Arrange
+        var action = new GeminiXliffActions(InvocationContext, FileManager);
+
+        var translationRequest = new TranslateXliffRequest
+        {
+            File = new FileReference { Name = TestFileName },
+            AIModel = ModelName
+        };
+
+        var customPrompt = "You are a human translator native in the target language identified in the file. Translate the text from the source language identified in the file to the target language identified in the file. Ensure that any tags included in the source language are replicated in the target language. Ensure the output is provided in valid XML/XLIFF format, similar to the input file format.";
+        var promtlRequest = new PromptRequest { };
+        var glossaryRequest = new GlossaryRequest();
+
+        // Act
+        var result = await action.StartXliffBatchTranslation(translationRequest, promtlRequest, customPrompt, glossaryRequest);
+
+        // Assert
+        Assert.IsNotNull(result);
+        Console.WriteLine(JsonConvert.SerializeObject(result, Formatting.Indented));
+    }
+
+    [TestMethod]
+    public async Task GetXliffBatchStatus_WithValidInputs_ReturnsTranslatedDocument()
+    {
+        // Arrange
+        var action = new GeminiXliffActions(InvocationContext, FileManager);
+
+        // Act
+        var result = await action.GetXliffBatchStatus("projects/1005036224929/locations/us-central1/batchPredictionJobs/2976508079538962432");
+
+        // Assert
+        Assert.IsNotNull(result);
+        Console.WriteLine(JsonConvert.SerializeObject(result, Formatting.Indented));
+    }
+
+    [TestMethod]
+    public async Task DownloadXliffFromBatch_WithValidInputs_ReturnsTranslatedDocument()
+    {
+        // Arrange
+        var action = new GeminiXliffActions(InvocationContext, FileManager);
+        var file = new FileReference { Name = TestFileName };
+        // Act
+        var result = await action.DownloadXliffFromBatch("projects/1005036224929/locations/us-central1/batchPredictionJobs/2976508079538962432", file);
+
+        // Assert
+        Assert.IsNotNull(result);
+        Console.WriteLine(JsonConvert.SerializeObject(result, Formatting.Indented));
     }
 }
