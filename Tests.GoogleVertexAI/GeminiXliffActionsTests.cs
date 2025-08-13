@@ -159,8 +159,13 @@ public class GeminiXliffActionsTests : TestBase
         // Arrange
         var action = new GeminiXliffActions(InvocationContext, FileManager);
         var file = new FileReference { Name = TestFileName };
+
+        var originalfile = new GetBatchResultRequest
+        {
+            OriginalXliff = file
+        };
         // Act
-        var result = await action.DownloadXliffFromBatch("projects/1005036224929/locations/us-central1/batchPredictionJobs/2976508079538962432", file);
+        var result = await action.DownloadXliffFromBatch("projects/1005036224929/locations/us-central1/batchPredictionJobs/3097387288385028096", originalfile);
 
         // Assert
         Assert.IsNotNull(result);

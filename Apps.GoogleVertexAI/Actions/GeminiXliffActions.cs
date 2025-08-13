@@ -797,7 +797,7 @@ public class GeminiXliffActions : VertexAiInvocable
     Description = "Reads batch output JSONL from GCS, merges into original XLIFF and returns the translated file.")]
     public async Task<TranslateXliffResponse> DownloadXliffFromBatch(
     [ActionParameter, Display("Batch job name")] string jobName,
-    [ActionParameter, Display("Original XLIFF file")] FileReference originalXliff)
+    [ActionParameter] GetBatchResultRequest originalXliff)
     {
         var region = TryGetLocationFromJobName(jobName, out var loc)
        ? loc
@@ -880,7 +880,7 @@ public class GeminiXliffActions : VertexAiInvocable
             }
         }
 
-        var xliff = await DownloadXliffDocumentAsync(originalXliff);
+        var xliff = await DownloadXliffDocumentAsync(originalXliff.OriginalXliff);
         foreach (var tu in xliff.TranslationUnits)
         {
             if (translations.TryGetValue(tu.Id, out var tgt))
@@ -888,8 +888,8 @@ public class GeminiXliffActions : VertexAiInvocable
         }
 
         var outStream = xliff.ToStream();
-        var outFile = await _fileManagementClient.UploadAsync(outStream, originalXliff.ContentType ?? "application/xml",
-            Path.GetFileNameWithoutExtension(originalXliff.Name) + ".translated.xliff");
+        var outFile = await _fileManagementClient.UploadAsync(outStream, originalXliff.OriginalXliff.ContentType ?? "application/xml",
+            Path.GetFileNameWithoutExtension(originalXliff.OriginalXliff.Name) + ".translated.xliff");
 
         return new TranslateXliffResponse { File = outFile, Usage = usage, Warnings = warnings };
     }
