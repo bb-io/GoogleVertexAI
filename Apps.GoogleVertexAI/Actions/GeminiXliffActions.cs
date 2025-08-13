@@ -714,13 +714,16 @@ public class GeminiXliffActions : VertexAiInvocable
     [ActionParameter] GlossaryRequest glossary)
     {
         var xliff = await DownloadXliffDocumentAsync(input.File);
-        var units = FilterTranslationUnits(xliff.TranslationUnits,
-            input.PostEditLockedSegments ?? false, input.ProcessOnlyTargetState).ToList();
+        var units = FilterTranslationUnits(
+            xliff.TranslationUnits,
+            input.PostEditLockedSegments ?? false,
+            input.ProcessOnlyTargetState).ToList();
 
         if (!units.Any())
             throw new PluginMisconfigurationException("No translation units to process.");
 
         var systemPrompt = GetSystemPrompt(string.IsNullOrEmpty(prompt));
+
         string? glossaryText = null;
         if (glossary?.Glossary != null)
         {
@@ -742,17 +745,22 @@ public class GeminiXliffActions : VertexAiInvocable
         }
         jsonlMs.Position = 0;
 
-        var effectiveRegion = ResolveVertexRegion(Region);
+        var effectiveRegion = ResolveVertexRegion(
+            InvocationContext.AuthenticationCredentialsProviders.Get(CredNames.Region).Value);
+
         var storage = ClientFactory.CreateStorage(InvocationContext.AuthenticationCredentialsProviders);
         var gcsBucket = await EnsureRegionalBucketAsync(storage, ProjectId, effectiveRegion);
 
-        var prefix = NormalizePrefix(null);
-        var batchId = Guid.NewGuid().ToString("N");
-        var inputObject = $"{prefix}{ProjectId}/{effectiveRegion}/{batchId}/input.jsonl";
-        var outputPrefix = $"gs://{gcsBucket}/{prefix}{ProjectId}/{effectiveRegion}/{batchId}/out";
+        var date = DateTime.UtcNow.ToString("yyyyMMdd");
+        var batchIdShort = Guid.NewGuid().ToString("n")[..8];
+        var basePrefix = $"xliff/{date}/{batchIdShort}/";
+
+        var inputObject = $"{basePrefix}input.jsonl";
         await storage.UploadObjectAsync(gcsBucket, inputObject, "application/json", jsonlMs);
 
         var inputUri = $"gs://{gcsBucket}/{inputObject}";
+        var outputPrefix = $"gs://{gcsBucket}/{basePrefix}";
+
         var normalizedModel = NormalizeModelResourceName(input.AIModel);
 
         var jobClient = ClientFactory.CreateJobService(InvocationContext.AuthenticationCredentialsProviders, effectiveRegion);
@@ -760,7 +768,7 @@ public class GeminiXliffActions : VertexAiInvocable
 
         var job = new BatchPredictionJob
         {
-            DisplayName = $"xliff-batch-{DateTime.UtcNow:yyyyMMdd-HHmmss}",
+            DisplayName = $"xliff-{effectiveRegion}-{date}-{batchIdShort}",
             Model = normalizedModel,
             InputConfig = new BatchPredictionJob.Types.InputConfig
             {
@@ -784,34 +792,6 @@ public class GeminiXliffActions : VertexAiInvocable
             Items = units.Count
         };
     }
-
-
-    [Action("(Batch) Get batch status",
-        Description = "Returns state and completion stats for a Batch.")]
-    public Task<BatchStatusResponse> GetXliffBatchStatus([ActionParameter] string jobName)
-    {
-        var region = TryGetLocationFromJobName(jobName, out var loc)
-       ? loc
-       : ResolveVertexRegion(InvocationContext.AuthenticationCredentialsProviders.Get(CredNames.Region).Value);
-
-        var jobClient = ClientFactory.CreateJobService(
-            InvocationContext.AuthenticationCredentialsProviders,
-            region);
-
-        var job = jobClient.GetBatchPredictionJob(jobName);
-
-        return Task.FromResult(new BatchStatusResponse
-        {
-            State = job.State.ToString(),
-            SuccessfulCount = job.CompletionStats?.SuccessfulCount ?? 0,
-            FailedCount = job.CompletionStats?.FailedCount ?? 0,
-            OutputUriPrefix = job.OutputConfig?.GcsDestination?.OutputUriPrefix,
-            ErrorCode = job.Error?.Code.ToString(),
-            ErrorMessage = job.Error?.Message,
-            PartialFailures = job.PartialFailures?.Select(pf => $"{pf.Code}: {pf.Message}")?.ToList()
-        });
-    }
-
 
     [Action("(Batch) Download XLIFF from batch",
     Description = "Reads batch output JSONL from GCS, merges into original XLIFF and returns the translated file.")]
@@ -982,8 +962,9 @@ public class GeminiXliffActions : VertexAiInvocable
 
     private async Task<string> EnsureRegionalBucketAsync(StorageClient storage, string projectId, string region)
     {
-        var bucketName = $"blackbird-batch-{projectId}-{region}".ToLowerInvariant();
-        bucketName = bucketName.Replace("_", "-");
+        var bucketName = $"blackbird-batch-{projectId}-{region}"
+         .ToLowerInvariant()
+         .Replace("_", "-");
 
         try
         {
@@ -991,11 +972,12 @@ public class GeminiXliffActions : VertexAiInvocable
             if (existing == null)
                 throw new PluginApplicationException($"Bucket '{bucketName}' could not be retrieved.");
 
-            if (!SameLocation(existing.Location, region))
+            if (!IsCompatibleLocation(existing.Location, region))
             {
                 throw new PluginApplicationException(
                     $"Bucket '{bucketName}' is in '{existing.Location}', but job region is '{region}'. " +
-                    $"Use a bucket in the same region or let the action create one automatically.");
+                    $"Use a compatible location (same region or a multi-region that includes it), " +
+                    $"or let the action create one automatically.");
             }
 
             return bucketName;
@@ -1032,6 +1014,22 @@ public class GeminiXliffActions : VertexAiInvocable
                 return alt;
             }
         }
+    }
+
+    private static bool IsCompatibleLocation(string? bucketLocation, string region)
+    {
+        if (string.IsNullOrWhiteSpace(bucketLocation)) return false;
+
+        var b = bucketLocation.Trim().ToLowerInvariant();
+        var r = region.Trim().ToLowerInvariant();
+
+        if (b == r) return true;
+
+        if (b == "us" && r.StartsWith("us-")) return true;
+        if (b == "eu" && (r.StartsWith("europe-") || r.StartsWith("eu-"))) return true;
+        if (b == "asia" && r.StartsWith("asia-")) return true;
+
+        return false;
     }
 
     private static string NormalizePrefix(string? prefix)
