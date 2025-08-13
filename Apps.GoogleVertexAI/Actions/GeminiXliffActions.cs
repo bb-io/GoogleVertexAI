@@ -703,8 +703,6 @@ public class GeminiXliffActions : VertexAiInvocable
         return xliffDocument;
     }
 
-    /////////
-
     [Action("(Batch) Process XLIFF file",
     Description = "Uploads JSONL to GCS and creates a Vertex AI BatchPredictionJob for translating XLIFF.")]
     public async Task<StartBatchXliffResponse> StartXliffBatchTranslation(
@@ -792,6 +790,103 @@ public class GeminiXliffActions : VertexAiInvocable
             Items = units.Count
         };
     }
+
+    [Action("(Batch) Post-edit XLIFF file",
+    Description = "Uploads JSONL to GCS and creates a Vertex AI BatchPredictionJob for post-editing targets in XLIFF 1.2.")]
+    public async Task<StartBatchXliffResponse> StartXliffPostEditBatch(
+    [ActionParameter] PostEditXliffRequest input,
+    [ActionParameter, Display("Prompt", Description = "Additional instructions")] string? prompt,
+    [ActionParameter] GlossaryRequest glossary,
+    [ActionParameter] PromptRequest promptRequest)
+    {
+        if (input.File == null || string.IsNullOrEmpty(input.File.Name))
+            throw new PluginMisconfigurationException("The input file is empty. Please check your input and try again.");
+
+        var xliff = await DownloadXliffDocumentAsync(input.File);
+        var units = FilterTranslationUnits(
+            xliff.TranslationUnits,
+            input.PostEditLockedSegments ?? false,
+            input.ProcessOnlyTargetState).ToList();
+
+        if (!units.Any())
+            throw new PluginMisconfigurationException("No translation units to process.");
+
+        var sourceLanguage = input.SourceLanguage ?? xliff.SourceLanguage;
+        var targetLanguage = input.TargetLanguage ?? xliff.TargetLanguage;
+
+        var systemPrompt = "You are a linguistic expert who post-edits translations according to the given instructions.";
+
+        string? glossaryText = null;
+        if (glossary?.Glossary != null)
+        {
+            using var glossStream = await _fileManagementClient.DownloadAsync(glossary.Glossary);
+            using var sr = new StreamReader(glossStream);
+            glossaryText = await sr.ReadToEndAsync();
+        }
+
+        var jsonlMs = new MemoryStream();
+        using (var sw = new StreamWriter(jsonlMs, new UTF8Encoding(false), 1024, leaveOpen: true))
+        {
+            foreach (var tu in units)
+            {
+                var userPrompt = BuildPerUnitPostEditPrompt(
+                    tu.Id, tu.Source, tu.Target, sourceLanguage, targetLanguage, prompt, glossaryText);
+
+                var req = BuildBatchRequestObject(userPrompt, systemPrompt, promptRequest, input.AIModel);
+                var line = JsonConvert.SerializeObject(req, Formatting.None);
+                await sw.WriteLineAsync(line);
+            }
+        }
+        jsonlMs.Position = 0;
+
+        var effectiveRegion = ResolveVertexRegion(
+            InvocationContext.AuthenticationCredentialsProviders.Get(CredNames.Region).Value);
+
+        var storage = ClientFactory.CreateStorage(InvocationContext.AuthenticationCredentialsProviders);
+        var gcsBucket = await EnsureRegionalBucketAsync(storage, ProjectId, effectiveRegion);
+
+        var date = DateTime.UtcNow.ToString("yyyyMMdd");
+        var batchIdShort = Guid.NewGuid().ToString("n")[..8];
+        var basePrefix = $"xliff/{date}/{batchIdShort}/";
+
+        var inputObject = $"{basePrefix}input.jsonl";
+        await storage.UploadObjectAsync(gcsBucket, inputObject, "application/json", jsonlMs);
+
+        var inputUri = $"gs://{gcsBucket}/{inputObject}";
+        var outputPrefix = $"gs://{gcsBucket}/{basePrefix}";
+
+        var normalizedModel = NormalizeModelResourceName(input.AIModel);
+
+        var jobClient = ClientFactory.CreateJobService(InvocationContext.AuthenticationCredentialsProviders, effectiveRegion);
+        var parent = LocationName.FromProjectLocation(ProjectId, effectiveRegion);
+
+        var job = new BatchPredictionJob
+        {
+            DisplayName = $"xliff-pe-{effectiveRegion}-{date}-{batchIdShort}",
+            Model = normalizedModel,
+            InputConfig = new BatchPredictionJob.Types.InputConfig
+            {
+                InstancesFormat = "jsonl",
+                GcsSource = new GcsSource { Uris = { inputUri } }
+            },
+            OutputConfig = new BatchPredictionJob.Types.OutputConfig
+            {
+                PredictionsFormat = "jsonl",
+                GcsDestination = new GcsDestination { OutputUriPrefix = outputPrefix }
+            }
+        };
+
+        var created = jobClient.CreateBatchPredictionJob(parent, job);
+
+        return new StartBatchXliffResponse
+        {
+            JobName = created.Name,
+            InputUri = inputUri,
+            OutputUriPrefix = outputPrefix,
+            Items = units.Count
+        };
+    }
+
 
     [Action("(Batch) Download XLIFF from batch",
     Description = "Reads batch output JSONL from GCS, merges into original XLIFF and returns the translated file.")]
@@ -893,6 +988,37 @@ public class GeminiXliffActions : VertexAiInvocable
 
         return new TranslateXliffResponse { File = outFile, Usage = usage, Warnings = warnings };
     }
+
+    private static string BuildPerUnitPostEditPrompt(string id,string source,string target,string sourceLang, string targetLang,string? userInstruction,string? glossaryText)
+    {
+        var sb = new StringBuilder();
+
+        sb.AppendLine($"Your input contains a source sentence in {sourceLang} and its translation into {targetLang}.");
+        sb.AppendLine("Review and edit the translated target text so that it is a correct and accurate translation of the source text.");
+        sb.AppendLine("If you see XML tags in the source, include them in the target text and do not delete or modify them.");
+        if (!string.IsNullOrWhiteSpace(userInstruction))
+        {
+            sb.AppendLine();
+            sb.AppendLine("Additional instructions:");
+            sb.AppendLine(userInstruction.Trim());
+        }
+        if (!string.IsNullOrWhiteSpace(glossaryText))
+        {
+            sb.AppendLine();
+            sb.AppendLine("Use the following glossary where applicable to ensure terminology consistency:");
+            sb.AppendLine(glossaryText);
+        }
+
+        sb.AppendLine();
+        sb.AppendLine($"Text ID: {id}");
+        sb.AppendLine("Source: " + source);
+        sb.AppendLine("Current target: " + target);
+
+        sb.AppendLine($"Return ONLY the final target text in the format [ID:{id}]{{target}} and nothing else.");
+
+        return sb.ToString();
+    }
+
 
     private static string ExtractTextFromResponse(JToken response)
     {

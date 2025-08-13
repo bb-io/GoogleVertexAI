@@ -126,6 +126,30 @@ public class GeminiXliffActionsTests : TestBase
     }
 
     [TestMethod]
+    public async Task StartPostEditXliffBatchTranslation_WithValidInputs_ReturnsTranslatedDocument()
+    {
+        // Arrange
+        var action = new GeminiXliffActions(InvocationContext, FileManager);
+
+        var translationRequest = new PostEditXliffRequest
+        {
+            File = new FileReference { Name = TestFileName },
+            AIModel = "gemini-2.5-flash"
+        };
+
+        var customPrompt = "You are a human translator native in the target language identified in the file. Translate the text from the source language identified in the file to the target language identified in the file. Ensure that any tags included in the source language are replicated in the target language. Ensure the output is provided in valid XML/XLIFF format, similar to the input file format.";
+        var promtlRequest = new PromptRequest { };
+        var glossaryRequest = new GlossaryRequest();
+
+        // Act
+        var result = await action.StartXliffPostEditBatch(translationRequest, customPrompt, glossaryRequest, promtlRequest);
+
+        // Assert
+        Assert.IsNotNull(result);
+        Console.WriteLine(JsonConvert.SerializeObject(result, Formatting.Indented));
+    }
+
+    [TestMethod]
     public async Task GetXliffBatchStatus_WithValidInputs_ReturnsTranslatedDocument()
     {
         // Arrange
@@ -133,7 +157,7 @@ public class GeminiXliffActionsTests : TestBase
 
         var batchIdentifier = new BatchIdentifier
         {
-            JobName = "projects/1005036224929/locations/us-central1/batchPredictionJobs/3097387288385028096",
+            JobName = "projects/1005036224929/locations/us-central1/batchPredictionJobs/1723507927060316160",
             
         };
         var memory = new BatchMemory
