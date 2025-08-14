@@ -6,7 +6,7 @@
         <Nullable>enable</Nullable>
         <Product>Google Gemini AI</Product>
         <Description>Powerful and unified machine learning platform offered by Google Cloud</Description>
-        <Version>1.3.8</Version>
+        <Version>1.3.9</Version>
         <AssemblyName>Apps.GoogleVertexAI</AssemblyName>
     </PropertyGroup>
 
@@ -17,6 +17,7 @@
         <PackageReference Include="Blackbird.Filters" Version="1.1.10" />
         <PackageReference Include="Blackbird.Xliff.Utils" Version="1.1.14" />
         <PackageReference Include="Google.Cloud.AIPlatform.V1" Version="3.38.0" />
+        <PackageReference Include="Google.Cloud.Storage.V1" Version="4.13.0" />
         <PackageReference Include="morelinq" Version="4.4.0" />
     </ItemGroup>
 

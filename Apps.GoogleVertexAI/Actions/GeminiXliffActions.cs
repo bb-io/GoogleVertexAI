@@ -19,6 +19,15 @@ using Blackbird.Applications.Sdk.Common.Exceptions;
 using Apps.GoogleVertexAI.Utils;
 using Apps.GoogleVertexAI.Models.Entities;
 using Blackbird.Xliff.Utils.Models;
+using Google.Api.Gax.ResourceNames;
+using Google.Cloud.AIPlatform.V1;
+using Google.Cloud.Storage.V1;
+using Newtonsoft.Json.Linq;
+using Apps.GoogleVertexAI.Factories;
+using Google.Apis.Storage.v1.Data;
+using System.Net;
+using Apps.GoogleVertexAI.Constants;
+using Blackbird.Applications.Sdk.Utils.Extensions.Sdk;
 
 namespace Apps.GoogleVertexAI.Actions;
 
@@ -692,5 +701,536 @@ public class GeminiXliffActions : VertexAiInvocable
         }
 
         return xliffDocument;
+    }
+
+    [Action("(Batch) Process XLIFF file",
+    Description = "Uploads JSONL to GCS and creates a Vertex AI BatchPredictionJob for translating XLIFF.")]
+    public async Task<StartBatchXliffResponse> StartXliffBatchTranslation(
+    [ActionParameter] TranslateXliffRequest input,
+    [ActionParameter] PromptRequest promptRequest,
+    [ActionParameter, Display("Prompt")] string? prompt,
+    [ActionParameter] GlossaryRequest glossary)
+    {
+        var xliff = await DownloadXliffDocumentAsync(input.File);
+        var units = FilterTranslationUnits(
+            xliff.TranslationUnits,
+            input.PostEditLockedSegments ?? false,
+            input.ProcessOnlyTargetState).ToList();
+
+        if (!units.Any())
+            throw new PluginMisconfigurationException("No translation units to process.");
+
+        var systemPrompt = GetSystemPrompt(string.IsNullOrEmpty(prompt));
+
+        string? glossaryText = null;
+        if (glossary?.Glossary != null)
+        {
+            using var glossStream = await _fileManagementClient.DownloadAsync(glossary.Glossary);
+            using var sr = new StreamReader(glossStream);
+            glossaryText = await sr.ReadToEndAsync();
+        }
+
+        var jsonlMs = new MemoryStream();
+        using (var sw = new StreamWriter(jsonlMs, new UTF8Encoding(false), 1024, leaveOpen: true))
+        {
+            foreach (var tu in units)
+            {
+                var userPrompt = BuildPerUnitPrompt(tu.Id, tu.Source, prompt, glossaryText);
+                var req = BuildBatchRequestObject(userPrompt, systemPrompt, promptRequest, input.AIModel);
+                var line = JsonConvert.SerializeObject(req, Formatting.None);
+                await sw.WriteLineAsync(line);
+            }
+        }
+        jsonlMs.Position = 0;
+
+        var effectiveRegion = ResolveVertexRegion(
+            InvocationContext.AuthenticationCredentialsProviders.Get(CredNames.Region).Value);
+
+        var storage = ClientFactory.CreateStorage(InvocationContext.AuthenticationCredentialsProviders);
+        var gcsBucket = await EnsureRegionalBucketAsync(storage, ProjectId, effectiveRegion);
+
+        var date = DateTime.UtcNow.ToString("yyyyMMdd");
+        var batchIdShort = Guid.NewGuid().ToString("n")[..8];
+        var basePrefix = $"xliff/{date}/{batchIdShort}/";
+
+        var inputObject = $"{basePrefix}input.jsonl";
+        await storage.UploadObjectAsync(gcsBucket, inputObject, "application/json", jsonlMs);
+
+        var inputUri = $"gs://{gcsBucket}/{inputObject}";
+        var outputPrefix = $"gs://{gcsBucket}/{basePrefix}";
+
+        var normalizedModel = NormalizeModelResourceName(input.AIModel);
+
+        var jobClient = ClientFactory.CreateJobService(InvocationContext.AuthenticationCredentialsProviders, effectiveRegion);
+        var parent = LocationName.FromProjectLocation(ProjectId, effectiveRegion);
+
+        var job = new BatchPredictionJob
+        {
+            DisplayName = $"xliff-{effectiveRegion}-{date}-{batchIdShort}",
+            Model = normalizedModel,
+            InputConfig = new BatchPredictionJob.Types.InputConfig
+            {
+                InstancesFormat = "jsonl",
+                GcsSource = new GcsSource { Uris = { inputUri } }
+            },
+            OutputConfig = new BatchPredictionJob.Types.OutputConfig
+            {
+                PredictionsFormat = "jsonl",
+                GcsDestination = new GcsDestination { OutputUriPrefix = outputPrefix }
+            }
+        };
+
+        var created = jobClient.CreateBatchPredictionJob(parent, job);
+
+        return new StartBatchXliffResponse
+        {
+            JobName = created.Name,
+            InputUri = inputUri,
+            OutputUriPrefix = outputPrefix,
+            Items = units.Count
+        };
+    }
+
+    [Action("(Batch) Post-edit XLIFF file",
+    Description = "Uploads JSONL to GCS and creates a Vertex AI BatchPredictionJob for post-editing targets in XLIFF 1.2.")]
+    public async Task<StartBatchXliffResponse> StartXliffPostEditBatch(
+    [ActionParameter] PostEditXliffRequest input,
+    [ActionParameter, Display("Prompt", Description = "Additional instructions")] string? prompt,
+    [ActionParameter] GlossaryRequest glossary,
+    [ActionParameter] PromptRequest promptRequest)
+    {
+        if (input.File == null || string.IsNullOrEmpty(input.File.Name))
+            throw new PluginMisconfigurationException("The input file is empty. Please check your input and try again.");
+
+        var xliff = await DownloadXliffDocumentAsync(input.File);
+        var units = FilterTranslationUnits(
+            xliff.TranslationUnits,
+            input.PostEditLockedSegments ?? false,
+            input.ProcessOnlyTargetState).ToList();
+
+        if (!units.Any())
+            throw new PluginMisconfigurationException("No translation units to process.");
+
+        var sourceLanguage = input.SourceLanguage ?? xliff.SourceLanguage;
+        var targetLanguage = input.TargetLanguage ?? xliff.TargetLanguage;
+
+        var systemPrompt = "You are a linguistic expert who post-edits translations according to the given instructions.";
+
+        string? glossaryText = null;
+        if (glossary?.Glossary != null)
+        {
+            using var glossStream = await _fileManagementClient.DownloadAsync(glossary.Glossary);
+            using var sr = new StreamReader(glossStream);
+            glossaryText = await sr.ReadToEndAsync();
+        }
+
+        var jsonlMs = new MemoryStream();
+        using (var sw = new StreamWriter(jsonlMs, new UTF8Encoding(false), 1024, leaveOpen: true))
+        {
+            foreach (var tu in units)
+            {
+                var userPrompt = BuildPerUnitPostEditPrompt(
+                    tu.Id, tu.Source, tu.Target, sourceLanguage, targetLanguage, prompt, glossaryText);
+
+                var req = BuildBatchRequestObject(userPrompt, systemPrompt, promptRequest, input.AIModel);
+                var line = JsonConvert.SerializeObject(req, Formatting.None);
+                await sw.WriteLineAsync(line);
+            }
+        }
+        jsonlMs.Position = 0;
+
+        var effectiveRegion = ResolveVertexRegion(
+            InvocationContext.AuthenticationCredentialsProviders.Get(CredNames.Region).Value);
+
+        var storage = ClientFactory.CreateStorage(InvocationContext.AuthenticationCredentialsProviders);
+        var gcsBucket = await EnsureRegionalBucketAsync(storage, ProjectId, effectiveRegion);
+
+        var date = DateTime.UtcNow.ToString("yyyyMMdd");
+        var batchIdShort = Guid.NewGuid().ToString("n")[..8];
+        var basePrefix = $"xliff/{date}/{batchIdShort}/";
+
+        var inputObject = $"{basePrefix}input.jsonl";
+        await storage.UploadObjectAsync(gcsBucket, inputObject, "application/json", jsonlMs);
+
+        var inputUri = $"gs://{gcsBucket}/{inputObject}";
+        var outputPrefix = $"gs://{gcsBucket}/{basePrefix}";
+
+        var normalizedModel = NormalizeModelResourceName(input.AIModel);
+
+        var jobClient = ClientFactory.CreateJobService(InvocationContext.AuthenticationCredentialsProviders, effectiveRegion);
+        var parent = LocationName.FromProjectLocation(ProjectId, effectiveRegion);
+
+        var job = new BatchPredictionJob
+        {
+            DisplayName = $"xliff-pe-{effectiveRegion}-{date}-{batchIdShort}",
+            Model = normalizedModel,
+            InputConfig = new BatchPredictionJob.Types.InputConfig
+            {
+                InstancesFormat = "jsonl",
+                GcsSource = new GcsSource { Uris = { inputUri } }
+            },
+            OutputConfig = new BatchPredictionJob.Types.OutputConfig
+            {
+                PredictionsFormat = "jsonl",
+                GcsDestination = new GcsDestination { OutputUriPrefix = outputPrefix }
+            }
+        };
+
+        var created = jobClient.CreateBatchPredictionJob(parent, job);
+
+        return new StartBatchXliffResponse
+        {
+            JobName = created.Name,
+            InputUri = inputUri,
+            OutputUriPrefix = outputPrefix,
+            Items = units.Count
+        };
+    }
+
+
+    [Action("(Batch) Download XLIFF from batch",
+    Description = "Reads batch output JSONL from GCS, merges into original XLIFF and returns the translated file.")]
+    public async Task<TranslateXliffResponse> DownloadXliffFromBatch(
+    [ActionParameter, Display("Batch job name")] string jobName,
+    [ActionParameter] GetBatchResultRequest originalXliff)
+    {
+        var region = TryGetLocationFromJobName(jobName, out var loc)
+       ? loc
+       : ResolveVertexRegion(InvocationContext.AuthenticationCredentialsProviders.Get(CredNames.Region).Value);
+
+        var jobClient = ClientFactory.CreateJobService(
+            InvocationContext.AuthenticationCredentialsProviders,
+            region);
+
+        var job = jobClient.GetBatchPredictionJob(jobName);
+
+        if (job.State != JobState.Succeeded)
+            throw new PluginApplicationException($"Batch job is not ready. Current state: {job.State}");
+
+        var outputPrefix = job.OutputConfig?.GcsDestination?.OutputUriPrefix
+            ?? throw new PluginApplicationException("Batch job has no GCS output prefix.");
+
+        if (!outputPrefix.StartsWith("gs://"))
+            throw new PluginApplicationException("Unexpected output URI prefix.");
+        var noScheme = outputPrefix.Substring("gs://".Length);
+        var slash = noScheme.IndexOf('/');
+        var bucket = slash >= 0 ? noScheme.Substring(0, slash) : noScheme;
+        var prefix = slash >= 0 ? noScheme.Substring(slash + 1) : "";
+
+        var storage = ClientFactory.CreateStorage(InvocationContext.AuthenticationCredentialsProviders);
+        var objects = storage.ListObjects(bucket, prefix)
+            .Where(o => o.Name.EndsWith(".jsonl", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(o => o.Name)
+            .ToList();
+
+        if (!objects.Any())
+            throw new PluginApplicationException("No JSONL outputs found in batch destination.");
+
+        var translations = new Dictionary<string, string>();
+        var usage = new UsageDto();
+        var warnings = new List<string>();
+
+        foreach (var obj in objects)
+        {
+            using var ms = new MemoryStream();
+            await storage.DownloadObjectAsync(obj, ms);
+            ms.Position = 0;
+
+            using var sr = new StreamReader(ms);
+            string? line;
+            while ((line = await sr.ReadLineAsync()) != null)
+            {
+                if (string.IsNullOrWhiteSpace(line)) continue;
+                var jo = JObject.Parse(line);
+
+                var resp = jo["response"];
+                if (resp == null)
+                {
+                    var status = jo["status"]?.ToString();
+                    if (!string.IsNullOrEmpty(status)) warnings.Add(status);
+                    continue;
+                }
+
+                var usageNode = resp["usageMetadata"];
+                if (usageNode != null)
+                {
+                    usage += new UsageDto(new GenerateContentResponse.Types.UsageMetadata
+                    {
+                        PromptTokenCount = (int?)usageNode["promptTokenCount"] ?? 0,
+                        CandidatesTokenCount = (int?)usageNode["candidatesTokenCount"] ?? 0,
+                        TotalTokenCount = (int?)usageNode["totalTokenCount"] ?? 0
+                    });
+                }
+
+                var text = ExtractTextFromResponse(resp);
+                if (string.IsNullOrWhiteSpace(text)) continue;
+
+                var m = Regex.Match(text, "\\{ID:(.*?)\\}(.+)$", RegexOptions.Singleline);
+                if (!m.Success) { warnings.Add("Cannot find ID prefix in: " + Truncate(text)); continue; }
+
+                var id = m.Groups[1].Value.Trim();
+                var content = m.Groups[2].Value.Trim();
+                if (!translations.ContainsKey(id))
+                    translations[id] = content;
+            }
+        }
+
+        var xliff = await DownloadXliffDocumentAsync(originalXliff.OriginalXliff);
+        foreach (var tu in xliff.TranslationUnits)
+        {
+            if (translations.TryGetValue(tu.Id, out var tgt))
+                tu.Target = tgt;
+        }
+
+        var outStream = xliff.ToStream();
+        var outFile = await _fileManagementClient.UploadAsync(outStream, originalXliff.OriginalXliff.ContentType ?? "application/xml",
+            Path.GetFileNameWithoutExtension(originalXliff.OriginalXliff.Name) + ".translated.xliff");
+
+        return new TranslateXliffResponse { File = outFile, Usage = usage, Warnings = warnings };
+    }
+
+    private static string BuildPerUnitPostEditPrompt(string id,string source,string target,string sourceLang, string targetLang,string? userInstruction,string? glossaryText)
+    {
+        var sb = new StringBuilder();
+
+        sb.AppendLine($"Your input contains a source sentence in {sourceLang} and its translation into {targetLang}.");
+        sb.AppendLine("Review and edit the translated target text so that it is a correct and accurate translation of the source text.");
+        sb.AppendLine("If you see XML tags in the source, include them in the target text and do not delete or modify them.");
+        if (!string.IsNullOrWhiteSpace(userInstruction))
+        {
+            sb.AppendLine();
+            sb.AppendLine("Additional instructions:");
+            sb.AppendLine(userInstruction.Trim());
+        }
+        if (!string.IsNullOrWhiteSpace(glossaryText))
+        {
+            sb.AppendLine();
+            sb.AppendLine("Use the following glossary where applicable to ensure terminology consistency:");
+            sb.AppendLine(glossaryText);
+        }
+
+        sb.AppendLine();
+        sb.AppendLine($"Text ID: {id}");
+        sb.AppendLine("Source: " + source);
+        sb.AppendLine("Current target: " + target);
+
+        sb.AppendLine($"Return ONLY the final target text in the format [ID:{id}]{{target}} and nothing else.");
+
+        return sb.ToString();
+    }
+
+
+    private static string ExtractTextFromResponse(JToken response)
+    {
+        var parts = response["candidates"]?.First?["content"]?["parts"] as JArray;
+        if (parts == null) return string.Empty;
+
+        var sb = new StringBuilder();
+        foreach (var p in parts)
+        {
+            var t = (string?)p["text"];
+            if (!string.IsNullOrEmpty(t)) sb.Append(t);
+        }
+        return sb.ToString();
+    }
+
+    private static bool TryGetLocationFromJobName(string jobName, out string location)
+    {
+        location = string.Empty;
+
+        if (BatchPredictionJobName.TryParse(jobName, out var rn))
+        {
+            location = rn.LocationId;
+            return !string.IsNullOrWhiteSpace(location);
+        }
+        var m = Regex.Match(jobName,
+            @"^projects/[^/]+/locations/(?<loc>[^/]+)/batchPredictionJobs/[^/]+$",
+            RegexOptions.IgnoreCase);
+        if (m.Success)
+        {
+            location = m.Groups["loc"].Value;
+            return true;
+        }
+
+        return false;
+    }
+    private static string Truncate(string s, int max = 120)
+        => s.Length <= max ? s : s.Substring(0, max) + "…";
+
+    private string ResolveVertexRegion(string region)
+    {
+        if (string.IsNullOrWhiteSpace(region)) return "us-central1";
+        var r = region.Trim().ToLowerInvariant();
+        return r == "global" ? "us-central1" : r;
+    }
+
+    private string ResolveGcsLocation(string region)
+    {
+        var r = ResolveVertexRegion(region);
+        if (r is "us" or "eu" or "asia") return r.ToUpperInvariant();
+        return r;
+    }
+    private static string NormalizeModelResourceName(string model)
+    {
+        if (string.IsNullOrWhiteSpace(model))
+            throw new PluginMisconfigurationException("Model is required.");
+
+        var m = model.Trim();
+
+        if (m.StartsWith("projects/", StringComparison.OrdinalIgnoreCase)) return m;
+        if (m.StartsWith("publishers/", StringComparison.OrdinalIgnoreCase)) return m;
+
+        if (m.StartsWith("models/", StringComparison.OrdinalIgnoreCase))
+            return $"publishers/google/{m}";
+
+        return $"publishers/google/models/{m}";
+    }
+
+    private async Task<string> EnsureRegionalBucketAsync(StorageClient storage, string projectId, string region)
+    {
+        var bucketName = $"blackbird-batch-{projectId}-{region}"
+         .ToLowerInvariant()
+         .Replace("_", "-");
+
+        try
+        {
+            var existing = await storage.GetBucketAsync(bucketName);
+            if (existing == null)
+                throw new PluginApplicationException($"Bucket '{bucketName}' could not be retrieved.");
+
+            if (!IsCompatibleLocation(existing.Location, region))
+            {
+                throw new PluginApplicationException(
+                    $"Bucket '{bucketName}' is in '{existing.Location}', but job region is '{region}'. " +
+                    $"Use a compatible location (same region or a multi-region that includes it), " +
+                    $"or let the action create one automatically.");
+            }
+
+            return bucketName;
+        }
+        catch (Google.GoogleApiException ex) when (ex.HttpStatusCode == HttpStatusCode.NotFound)
+        {
+            var bucket = new Bucket
+            {
+                Name = bucketName,
+                Location = region,
+                StorageClass = "STANDARD",
+                IamConfiguration = new Bucket.IamConfigurationData
+                {
+                    UniformBucketLevelAccess = new Bucket.IamConfigurationData.UniformBucketLevelAccessData { Enabled = true }
+                }
+            };
+
+            try
+            {
+                await storage.CreateBucketAsync(projectId, bucket);
+                return bucketName;
+            }
+            catch (Google.GoogleApiException createEx) when (createEx.HttpStatusCode == HttpStatusCode.Conflict)
+            {
+                var alt = $"{bucketName}-{Guid.NewGuid().ToString("n")[..6]}";
+                var altBucket = new Bucket
+                {
+                    Name = alt,
+                    Location = region,
+                    StorageClass = "STANDARD",
+                    IamConfiguration = bucket.IamConfiguration
+                };
+                await storage.CreateBucketAsync(projectId, altBucket);
+                return alt;
+            }
+        }
+    }
+
+    private static bool IsCompatibleLocation(string? bucketLocation, string region)
+    {
+        if (string.IsNullOrWhiteSpace(bucketLocation)) return false;
+
+        var b = bucketLocation.Trim().ToLowerInvariant();
+        var r = region.Trim().ToLowerInvariant();
+
+        if (b == r) return true;
+
+        if (b == "us" && r.StartsWith("us-")) return true;
+        if (b == "eu" && (r.StartsWith("europe-") || r.StartsWith("eu-"))) return true;
+        if (b == "asia" && r.StartsWith("asia-")) return true;
+
+        return false;
+    }
+
+    private static string NormalizePrefix(string? prefix)
+    {
+        var p = string.IsNullOrWhiteSpace(prefix) ? "blackbird-batch/" : prefix.Trim();
+        return p.EndsWith("/") ? p : p + "/";
+    }
+
+    private static bool SameLocation(string? bucketLocation, string region) =>
+        !string.IsNullOrWhiteSpace(bucketLocation) &&
+        string.Equals(bucketLocation, region, StringComparison.OrdinalIgnoreCase);
+
+    private static object BuildBatchRequestObject(string userPrompt, string systemPrompt, PromptRequest pr, string modelPath)
+    {
+        var genCfg = new Dictionary<string, object>();
+        if (pr.Temperature.HasValue) genCfg["temperature"] = pr.Temperature.Value;
+        if (pr.TopP.HasValue) genCfg["topP"] = pr.TopP.Value;
+        if (pr.TopK.HasValue) genCfg["topK"] = pr.TopK.Value;
+        if (pr.MaxOutputTokens.HasValue) genCfg["maxOutputTokens"] = pr.MaxOutputTokens.Value;
+
+        var system = new { parts = new[] { new { text = systemPrompt } } };
+        var contents = new[]
+        {
+        new
+        {
+            role = "user",
+            parts = new object[] { new { text = userPrompt } }
+        }
+            };
+
+        if (genCfg.Count == 0)
+        {
+            return new
+            {
+                request = new
+                {
+                    systemInstruction = system,
+                    contents = contents
+                }
+            };
+        }
+        else
+        {
+            return new
+            {
+                request = new
+                {
+                    systemInstruction = system,
+                    contents = contents,
+                    generationConfig = genCfg
+                }
+            };
+        }
+    }
+
+    private static string BuildPerUnitPrompt(string id, string source, string? userInstruction, string? glossaryText)
+    {
+        var sb = new StringBuilder();
+        if (!string.IsNullOrWhiteSpace(userInstruction))
+            sb.AppendLine(userInstruction.Trim());
+        else
+            sb.AppendLine("Translate the text.");
+
+        sb.AppendLine();
+        if (!string.IsNullOrWhiteSpace(glossaryText))
+        {
+            sb.AppendLine("Use the following glossary where applicable to ensure terminology consistency:");
+            sb.AppendLine(glossaryText);
+            sb.AppendLine();
+        }
+
+        sb.AppendLine($"Text ID: {id}");
+        sb.Append("Source: ").AppendLine(source);
+        sb.AppendLine("Return ONLY the processed target text, prefixed with {ID:" + id + "} and nothing else.");
+
+        return sb.ToString();
     }
 }
