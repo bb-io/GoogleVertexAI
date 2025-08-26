@@ -439,9 +439,14 @@ public class GeminiXliffActions : VertexAiInvocable
             systemPrompt += AdditionalPrompt;
         }
 
-          var userPrompt = $"{(input.SourceLanguage != null ? $"The {input.SourceLanguage} " : $"The {xliffDocument.SourceLanguage}: ")}\"{String.Join(" ", xliffDocument.TranslationUnits.Select(x => x.Source))}\" was translated as " +
-            $"\"{String.Join(" ", xliffDocument.TranslationUnits.Select(x => x.Target))}\"{(input.TargetLanguage != null ? $" into {input.TargetLanguage}" : $" into {xliffDocument.TargetLanguage}")}." +
-            $"{(input.TargetAudience != null ? $" The target audience is {input.TargetAudience}" : "")}";
+        var tuJson = System.Text.Json.JsonSerializer.Serialize(
+          xliffDocument.TranslationUnits.Select(x => new { x.Id, x.Source, x.Target }),
+          new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+
+        var userPrompt = $"Here are the translation units from {(input.SourceLanguage ?? xliffDocument.SourceLanguage)} into {(input.TargetLanguage ?? xliffDocument.TargetLanguage)}:\n" +
+                         tuJson +
+                         $"{(input.TargetAudience != null ? $"\nTarget audience: {input.TargetAudience}" : "")}";
+
 
         if (glossary.Glossary != null)
             {
