@@ -699,6 +699,42 @@ public class GeminiXliffActions : VertexAiInvocable
         await fileStream.CopyToAsync(xliffMemoryStream);
         xliffMemoryStream.Position = 0;
 
+        string? xliffVersion = null;
+        try
+        {
+            var xmlReaderSettings = new System.Xml.XmlReaderSettings
+            {
+                DtdProcessing = System.Xml.DtdProcessing.Prohibit,
+                IgnoreComments = true,
+                IgnoreWhitespace = true,
+                CloseInput = false
+            };
+
+            using var reader = System.Xml.XmlReader.Create(xliffMemoryStream, xmlReaderSettings);
+            reader.MoveToContent();
+
+            if (reader.NodeType == System.Xml.XmlNodeType.Element &&
+                reader.LocalName.Equals("xliff", StringComparison.OrdinalIgnoreCase))
+            {
+                xliffVersion = reader.GetAttribute("version");
+            }
+        }
+        catch
+        {
+        }
+        finally
+        {
+            xliffMemoryStream.Position = 0;
+        }
+
+        var supported = new HashSet<string>(StringComparer.Ordinal) { "1.2"};
+        if (!string.IsNullOrEmpty(xliffVersion) && !supported.Contains(xliffVersion))
+        {
+            throw new PluginMisconfigurationException(
+                $"Unsupported XLIFF version '{xliffVersion}'. Supported versions are 1.2 " +
+                "Please re-export your file as XLIFF 1.2 and try again.");
+        }
+
         var xliffDocument = xliffMemoryStream.ToXliffDocument();
         if (xliffDocument.TranslationUnits.Count == 0)
         {
