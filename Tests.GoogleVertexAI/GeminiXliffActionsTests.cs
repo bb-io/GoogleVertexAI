@@ -2,6 +2,7 @@
 using Apps.GoogleVertexAI.Models.Requests;
 using Apps.GoogleVertexAI.Polling;
 using Apps.GoogleVertexAI.Polling.Model;
+using Blackbird.Applications.Sdk.Common.Exceptions;
 using Blackbird.Applications.Sdk.Common.Files;
 using Blackbird.Applications.Sdk.Common.Polling;
 using DocumentFormat.OpenXml.Wordprocessing;
@@ -65,7 +66,28 @@ public class GeminiXliffActionsTests : TestBase
         Assert.IsNotNull(result.File);
         Console.WriteLine(JsonConvert.SerializeObject(result, Formatting.Indented));
     }
-    
+
+    [TestMethod]
+    public async Task TranslateXliff_WithNonV12_ThrowsException()
+    {
+        // Arrange
+        var action = new GeminiXliffActions(InvocationContext, FileManager);
+        var translationRequest = new TranslateXliffRequest
+        {
+            File = new FileReference { Name = "contentful.html.xlf" },
+            AIModel = ModelName
+        };
+        var customPrompt = "Prompt placeholder";
+        var modelRequest = new PromptRequest { };
+        var glossaryRequest = new GlossaryRequest();
+
+        // Act & Assert
+        await Assert.ThrowsExactlyAsync<PluginMisconfigurationException>(async () =>
+        {
+            await action.TranslateXliff(translationRequest, modelRequest, customPrompt, glossaryRequest, bucketSize: 100);
+        });
+    }
+
     [TestMethod]
     public async Task GetTranslationIssues_WithValidInputs_ReturnsIssuesAnalysis()
     {

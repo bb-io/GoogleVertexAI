@@ -28,6 +28,7 @@ using Google.Apis.Storage.v1.Data;
 using System.Net;
 using Apps.GoogleVertexAI.Constants;
 using Blackbird.Applications.Sdk.Utils.Extensions.Sdk;
+using Blackbird.Filters.Xliff.Xliff1;
 
 namespace Apps.GoogleVertexAI.Actions;
 
@@ -699,42 +700,16 @@ public class GeminiXliffActions : VertexAiInvocable
         await fileStream.CopyToAsync(xliffMemoryStream);
         xliffMemoryStream.Position = 0;
 
-        string? xliffVersion = null;
-        try
-        {
-            var xmlReaderSettings = new System.Xml.XmlReaderSettings
-            {
-                DtdProcessing = System.Xml.DtdProcessing.Prohibit,
-                IgnoreComments = true,
-                IgnoreWhitespace = true,
-                CloseInput = false
-            };
-
-            using var reader = System.Xml.XmlReader.Create(xliffMemoryStream, xmlReaderSettings);
-            reader.MoveToContent();
-
-            if (reader.NodeType == System.Xml.XmlNodeType.Element &&
-                reader.LocalName.Equals("xliff", StringComparison.OrdinalIgnoreCase))
-            {
-                xliffVersion = reader.GetAttribute("version");
-            }
-        }
-        catch
-        {
-        }
-        finally
-        {
-            xliffMemoryStream.Position = 0;
-        }
-
-        var supported = new HashSet<string>(StringComparer.Ordinal) { "1.2"};
-        if (!string.IsNullOrEmpty(xliffVersion) && !supported.Contains(xliffVersion))
+        var xliffString = await new StreamReader(xliffMemoryStream).ReadToEndAsync();
+        if (Xliff1Serializer.TryGetXliffVersion(xliffString, out var version)
+            && version != "1.2")
         {
             throw new PluginMisconfigurationException(
-                $"Unsupported XLIFF version '{xliffVersion}'. Supported versions are 1.2 " +
+                $"Unsupported XLIFF version '{version}'. Only version 1.2 is supported by this action. " +
                 "Please re-export your file as XLIFF 1.2 and try again.");
         }
 
+        xliffMemoryStream.Position = 0;
         var xliffDocument = xliffMemoryStream.ToXliffDocument();
         if (xliffDocument.TranslationUnits.Count == 0)
         {
