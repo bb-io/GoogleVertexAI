@@ -11,6 +11,9 @@ public class ScoreXliffResponse
     [Display("Average Score")]
     public float AverageScore { get; set; }
 
+    [Display("Segments estimated")]
+    public int SegmentsEstimated { get; set; }
+
     [Display("Usage")]
     public UsageDto Usage { get; set; } = new();
 }
