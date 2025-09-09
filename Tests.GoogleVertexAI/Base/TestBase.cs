@@ -2,6 +2,7 @@
 using Blackbird.Applications.Sdk.Common.Authentication;
 using Blackbird.Applications.Sdk.Common.Invocation;
 using Microsoft.Extensions.Configuration;
+using System.Text.Json;
 
 namespace GoogleVertexAI.Base
 {
@@ -48,6 +49,13 @@ namespace GoogleVertexAI.Base
             };
 
             FileManager = new FileManager();
+        }
+
+        private static JsonSerializerOptions PrintResultOptions => new() { WriteIndented = true };
+
+        public static void PrintResult(object obj)
+        {
+            Console.WriteLine(JsonSerializer.Serialize(obj, PrintResultOptions));
         }
     }
 }
