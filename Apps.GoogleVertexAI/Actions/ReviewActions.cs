@@ -21,13 +21,14 @@ public class ReviewActions(InvocationContext invocationContext, IFileManagementC
     : VertexAiInvocable(invocationContext)
 {
     [Action("Score segments", Description = "Gets segment and file level quality scores for XLIFF files")]
-    public async Task<ScoreXliffResponse> Score(
+    public async Task<ScoreResponse> Score(
         [ActionParameter] AIModelRequest model,
         [ActionParameter] ScoreRequest input,
         [ActionParameter, Display("Prompt", Description = "Add any linguistic criteria for quality evaluation")] string? prompt,
         [ActionParameter] PromptRequest promptRequest,
         [ActionParameter, Display("Bucket size", Description = "Specify the number of translation units to be processed at once. Default value: 1500. (See our documentation for an explanation)")] int? bucketSize = 1500)
     {
+        // TODO Apply agreements made on standup
         var fileStream = await fileManagementClient.DownloadAsync(input.File);
         Transformation transformation; 
         
@@ -41,31 +42,38 @@ public class ReviewActions(InvocationContext invocationContext, IFileManagementC
         }
 
         var statesToEstimate = input
-            .SegmentStatesToEstimate?
+            .EstimateUnitsWhereAllSegmentStates?
             .Select(SegmentStateHelper.ToSegmentState)
+            .Where(state => state != null)
+            .Select(state => state!.Value)
             .ToList() ?? [SegmentState.Initial, SegmentState.Translated];
-        var segmentsToEstimate = transformation
-            .GetSegments()
-            .Where(s => !string.IsNullOrEmpty(s.GetSource()) && !string.IsNullOrEmpty(s.GetTarget()))
-            .Where(s => statesToEstimate.Contains(s.State ?? SegmentState.Initial))
+        var unitsToEstimate = transformation
+            .GetUnits()
+            .Where(u => u.Id != null)
+            .Where(ReviewUtils.HasTranslatedContent)
+            .Where(u => ReviewUtils.HasSegmentWithState(u, statesToEstimate))
             .ToList();
-        var batches = segmentsToEstimate.Batch(bucketSize ?? 1500);
+        var batches = unitsToEstimate.Batch(bucketSize ?? 1500);
         var criteriaPrompt = string.IsNullOrEmpty(prompt)
             ? "accuracy, fluency, consistency, style, grammar and spelling"
             : prompt;
         var sourceLanguage = input.SourceLanguage ?? transformation.SourceLanguage;
         var targetLanguage = input.TargetLanguage ?? transformation.TargetLanguage;
 
-        var results = new Dictionary<int, float>();
+        var results = new Dictionary<string, double>();
         var usage = new UsageDto();
 
-        if (segmentsToEstimate.Count == 0)
+        if (unitsToEstimate.Count == 0)
         {
-            return new ScoreXliffResponse
+            return new ScoreResponse
             {
                 File = input.File,
+                TotalUnits = transformation.GetUnits().Count(),
+                TotalUnitsProcessed = 0,
+                TotalUnitsUnderThreshhold = 0,
+                TotalSegmentsFinalized = 0,
                 AverageScore = 0,
-                SegmentsEstimated = 0,
+                PercentageUnitsUnderThreshold = 0,
                 Usage = usage,
             };
         }
@@ -73,16 +81,16 @@ public class ReviewActions(InvocationContext invocationContext, IFileManagementC
         foreach (var batch in batches)
         {
             var systemPrompt =
-                "You are a linguistic expert that should process the following texts according to the given instructions. Include in your response the ID of the sentence and the score number as a comma separated array of tuples without any additional information (it is crucial because your response will be deserialized programmatically).";
+                "You are a linguistic expert that should process the following texts according to the given instructions. Include in your response the ID of the text unit and the score number as a comma separated array of tuples without any additional information (it is crucial because your response will be deserialized programmatically).";
 
             var userPrompt =
-                $"Your input is going to be a group of sentences in {sourceLanguage} and their translation into {targetLanguage}. " +
-                "Only provide as output the index of the sentence and the score number as a comma separated array of tuples. " +
-                $"Place the tuples in a same line and separate them using semicolons, example for two assessments: `2,7.0;32,50.0`. The score number is a score from 1.0 to 100.0 assessing the quality of the translation, considering the following criteria: {criteriaPrompt}. Sentences: ";
+                $"Your input is going to be a group of text units in {sourceLanguage} and their translation into {targetLanguage}. " +
+                $"Only provide as output the ID of the text unit like `{batch[0].Id}` and the score number as a comma separated array of tuples. " +
+                $"Place the tuples in a same line and separate them using semicolons, example for two assessments: `2,7.0;32,50.0`. The score number is a score from 1.0 to 100.0 assessing the quality of the translation, considering the following criteria: {criteriaPrompt}. Text units: ";
 
-            foreach (var segment in batch)
+            foreach (var unit in batch)
             {
-                userPrompt += $"{segmentsToEstimate.IndexOf(segment)}: {segment.GetSource()} -> {segment.GetTarget()}\n";
+                userPrompt += $"{unit.Id}: {ReviewUtils.GetUnitSource(unit)} -> {ReviewUtils.GetUnitTarget(unit)}\n";
             }
 
             var (result, promptUsage) = await ExecuteGeminiPrompt(promptRequest, model.AIModel, userPrompt, systemPrompt);
@@ -91,15 +99,15 @@ public class ReviewActions(InvocationContext invocationContext, IFileManagementC
 
             try
             {
-                foreach (var r in result.Split(";"))
+                foreach (var r in result.Trim('`').Split(";"))
                 {
                     if (string.IsNullOrWhiteSpace(r))
                         continue;
 
                     var split = r.Split(",");
-                    var index = int.Parse(split[0].Trim());
-                    var score = float.Parse(split[1].Trim());
-                    results.Add(index, score);
+                    var id = split[0].Trim();
+                    var score = double.Parse(split[1].Trim());
+                    results.Add(id, score);
                 }
             }
             catch (Exception ex)
@@ -111,43 +119,54 @@ public class ReviewActions(InvocationContext invocationContext, IFileManagementC
             }
         }
 
-        var newSegmentState = SegmentStateHelper.ToSegmentState(input.NewState ?? string.Empty);
-        var ShouldSaveScores = input.SaveScores ?? false;
-        Func<float, bool> isPassingTreshold = input.ScoreThresholdComparison switch
-        {
-            null or "" => score => score >= input.Threshold,
-            ">=" => score => score >= input.Threshold,
-            ">" => score => score > input.Threshold,
-            "=" => score => score == input.Threshold,
-            "<" => score => score < input.Threshold,
-            "<=" => score => score <= input.Threshold,
-            _ => throw new PluginMisconfigurationException("The provided condition is not supported. Supported conditions are: >, >=, =, <, <=")
-        };
-        XNamespace itsNamespace = "http://www.w3.org/2005/11/its";
+        var newSegmentState = SegmentStateHelper.ToSegmentState(input.NewState ?? string.Empty) ?? SegmentState.Reviewed;
+        var ShouldSaveScores = input.SaveScores ?? true;
+        var totalUnitsProcessed = 0;
+        var totalUnitsUnderThreshhold = 0;
+        var totalSegmentsFinalized = 0;
+        var totalScore = 0.0;
 
-        foreach (var result in results)
+        foreach (var unit in unitsToEstimate)
         {
-            var segment = segmentsToEstimate[result.Key];
-
-            if (input.Threshold != null && isPassingTreshold(result.Value) && newSegmentState != null)
-                segment.State = newSegmentState;
+            if (!results.TryGetValue(unit.Id!, out var score))
+                continue;
 
             if (ShouldSaveScores)
             {
-                segment.TargetAttributes.Add(new XAttribute(itsNamespace + "locQualityRatingScore", result.Value.ToString()));
-
-                if (input.Threshold != null)
-                    segment.TargetAttributes.Add(new XAttribute(itsNamespace + "locQualityRatingScoreThreshold", input.Threshold.ToString() ?? "0.0"));
+                unit.Quality.Score = score;
+                unit.Quality.ScoreThreshold = input.Threshold;
             }
+
+            if (score >= input.Threshold && input.Threshold != null)
+            {
+                foreach (var segment in unit.Segments)
+                {
+                    if (!statesToEstimate.Contains(segment.State ?? SegmentState.Initial))
+                        continue;
+
+                    segment.State = newSegmentState;
+                    totalSegmentsFinalized++;
+                }
+            }
+            else if (input.Threshold != null)
+            {
+                totalUnitsUnderThreshhold++;
+            }
+
+            totalScore += score;
+            totalUnitsProcessed++;
         }
 
-        var resultingXliff = transformation.Serialize();
-        var rewrittenXliff = XliffNamespaceRewriter.RewriteTargets(resultingXliff); // TEMP fix until we add ratings into filters library
-        return new ScoreXliffResponse
+        var xliffStream = transformation.Serialize().ToStream();
+        return new ScoreResponse
         {
-            File = await fileManagementClient.UploadAsync(rewrittenXliff.ToStream(), "application/xliff+xml", input.File.Name),
-            AverageScore = results.Average(x => x.Value),
-            SegmentsEstimated = results.Count,
+            File = await fileManagementClient.UploadAsync(xliffStream, "application/xliff+xml", input.File.Name),
+            TotalUnits = transformation.GetUnits().Count(),
+            TotalUnitsProcessed = totalUnitsProcessed,
+            TotalUnitsUnderThreshhold = totalUnitsUnderThreshhold,
+            TotalSegmentsFinalized = totalSegmentsFinalized,
+            AverageScore = totalUnitsProcessed > 0 ? (totalScore / totalUnitsProcessed) : totalScore,
+            PercentageUnitsUnderThreshold = totalUnitsProcessed > 0 ? ((double)totalUnitsUnderThreshhold / (double)totalUnitsProcessed) : totalUnitsUnderThreshhold,
             Usage = usage,
         };
     }

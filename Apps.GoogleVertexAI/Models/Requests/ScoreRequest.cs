@@ -15,21 +15,17 @@ public class ScoreRequest
     [Display("Target language")]
     public string? TargetLanguage { get; set; }
 
-    [Display("Score threshold", Description = "Scores range from 0 (lowest) to 100 (highest confidence).")]
-    public float? Threshold { get; set; }
+    [Display("Score threshold", Description = "Scores range from 0 (lowest) to 100 (highest confidence), anything lower than threshlod fails the quality check low confidence.")]
+    public double? Threshold { get; set; }
 
-    [Display("Threshold comparison", Description = "Determines how the score will be compared to the threshold (by default segment score should be greater or equal the threshold).")]
-    [StaticDataSource(typeof(ConditionDataSourceHandler))]
-    public string? ScoreThresholdComparison { get; set; }
-
-    [Display("New segment state", Description = "The target segment state to assign when the threshold condition is met (won't be changed by default).")]
+    [Display("New segment state", Description = "The target segment state to assign when the threshold condition is met ('review' by default).")]
     [StaticDataSource(typeof(XliffV2StateDataSourceHandler))]
     public string? NewState { get; set; }
 
-    [Display("Segment states to estimate", Description = "Only XLIFF segments in the selected states will be included in estimation ('initial' and 'translated' states by default).")]
+    [Display("Segment states to estimate", Description = "Only units with at least one segment in the selected states will be included in estimation ('initial' and 'translated' states by default).")]
     [StaticDataSource(typeof(XliffV2StateDataSourceHandler))]
-    public IEnumerable<string>? SegmentStatesToEstimate { get; set; }
+    public IEnumerable<string>? EstimateUnitsWhereAllSegmentStates { get; set; }
 
-    [Display("Save scores in segments")]
+    [Display("Save scores in segments", Description = "Saves quality score and treshhold on unit level according to ITS standard.")]
     public bool? SaveScores { get; set; }
 }

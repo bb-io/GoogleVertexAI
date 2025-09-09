@@ -16,7 +16,7 @@ public class ReviewActionsTests : TestBase
     private const string TestFileName = "contentful.html.xlf";
 
     [TestMethod]
-    public async Task Score_WithValidInputs_ReturnsAverageScore()
+    public async Task Score_WithoutThreshold_ReturnsAverageScore()
     {
         // Arrange
         var model = new AIModelRequest { AIModel = ModelName };
@@ -42,16 +42,14 @@ public class ReviewActionsTests : TestBase
     }
 
     [TestMethod]
-    public async Task Score_WithConfiguration_SavesScoresAndChangesStates()
+    public async Task Score_WithThreshhold_SavesScoresAndChangesStates()
     {
         // Arrange
         var model = new AIModelRequest { AIModel = ModelName };
         var scoreRequest = new ScoreRequest
         {
             File = new FileReference { Name = TestFileName },
-            Threshold = 99.0f,
-            NewState = SegmentStateHelper.Serialize(SegmentState.Reviewed),
-            SaveScores = true,
+            Threshold = 99.0,
         };
         string? prompt = null;
         var promptRequest = new PromptRequest
