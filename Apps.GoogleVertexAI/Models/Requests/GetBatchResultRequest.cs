@@ -5,7 +5,7 @@ namespace Apps.GoogleVertexAI.Models.Requests
 {
     public class GetBatchResultRequest
     {
-        [Display("Original XLIFF file")]
+        [Display("Transformation file")]
         public FileReference OriginalXliff { get; set; }
     }
 }

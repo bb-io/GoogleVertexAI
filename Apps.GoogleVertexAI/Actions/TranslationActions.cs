@@ -1,19 +1,19 @@
-﻿using Apps.GoogleVertexAI.Invocables;
+﻿using Apps.GoogleVertexAI.Helpers;
+using Apps.GoogleVertexAI.Invocables;
 using Apps.GoogleVertexAI.Models.Requests;
 using Apps.GoogleVertexAI.Models.Response;
 using Apps.GoogleVertexAI.Utils;
 using Blackbird.Applications.Sdk.Common;
 using Blackbird.Applications.Sdk.Common.Actions;
 using Blackbird.Applications.Sdk.Common.Exceptions;
-using Blackbird.Applications.Sdk.Common.Files;
 using Blackbird.Applications.Sdk.Common.Invocation;
-using Blackbird.Applications.Sdk.Glossaries.Utils.Converters;
 using Blackbird.Applications.SDK.Blueprints;
 using Blackbird.Applications.SDK.Extensions.FileManagement.Interfaces;
 using Blackbird.Filters.Constants;
 using Blackbird.Filters.Enums;
 using Blackbird.Filters.Extensions;
 using Blackbird.Filters.Transformations;
+using DocumentFormat.OpenXml.Spreadsheet;
 using Newtonsoft.Json;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -23,6 +23,15 @@ namespace Apps.GoogleVertexAI.Actions;
 [ActionList("Translation")]
 public class TranslationActions(InvocationContext invocationContext, IFileManagementClient fileManagementClient) : VertexAiInvocable(invocationContext)
 {
+    protected const string SystemPrompt = 
+        "You are tasked with localizing the provided text. Consider cultural nuances, idiomatic expressions, " +
+       "and locale-specific references to make the text feel natural in the target language. " +
+       "Ensure the structure of the original text is preserved. Respond with the localized text." +
+       "Please note that each text is considered as an individual item for translation. Even if there are entries " +
+       "that are identical or similar, each one should be processed separately. This is crucial because the output " +
+       "should be an array with the same number of elements as the input. This array will be used programmatically, " +
+       "so maintaining the same element count is essential.";
+
     [BlueprintActionDefinition(BlueprintAction.TranslateFile)]
     [Action("Translate", Description = "Translate file content retrieved from a CMS or file storage. The output can be used in compatible actions.")]
     public async Task<FileTranslationResponse> TranslateContent(
@@ -53,15 +62,6 @@ public class TranslationActions(InvocationContext invocationContext, IFileManage
         {
             var json = JsonConvert.SerializeObject(batch.Select((x, i) => "{ID:" + i + "}" + x.GetSource()));
 
-            var systemPrompt = 
-               "You are tasked with localizing the provided text. Consider cultural nuances, idiomatic expressions, " +
-               "and locale-specific references to make the text feel natural in the target language. " +
-               "Ensure the structure of the original text is preserved. Respond with the localized text." +
-               "Please note that each text is considered as an individual item for translation. Even if there are entries " +
-               "that are identical or similar, each one should be processed separately. This is crucial because the output " +
-               "should be an array with the same number of elements as the input. This array will be used programmatically, " +
-               "so maintaining the same element count is essential.";
-
             var userPrompt = 
                 $"Please process ALL texts in the provided array. It is critical that you translate EVERY item individually, not just the first one. " +
                 $"Translate the following texts from {content.SourceLanguage} to {content.TargetLanguage}. Return the outputs as a serialized JSON array of strings without additional formatting, " +
@@ -72,7 +72,7 @@ public class TranslationActions(InvocationContext invocationContext, IFileManage
 
             if (glossary.Glossary != null)
             {
-                var glossaryPromptPart = await GetGlossaryPromptPart(glossary.Glossary, json);
+                var glossaryPromptPart = await GlossaryHelper.GetGlossaryPromptPart(fileManagementClient, glossary.Glossary, json);
                 if (glossaryPromptPart != null)
                 {
                     var glossaryPrompt =
@@ -85,7 +85,7 @@ public class TranslationActions(InvocationContext invocationContext, IFileManage
                 }
             }
 
-            var (response, promptUsage) = await ExecuteGeminiPrompt(promptRequest, model, userPrompt, systemPrompt);
+            var (response, promptUsage) = await ExecuteGeminiPrompt(promptRequest, model, userPrompt, SystemPrompt);
 
             var results = new List<string?>();
 
@@ -163,41 +163,78 @@ public class TranslationActions(InvocationContext invocationContext, IFileManage
         } else
         {
             result.File = await fileManagementClient.UploadAsync(content.Serialize().ToStream(), MediaTypes.Xliff, content.XliffFileName);
-        }        
+        }
 
         return result;
-
     }
 
-    private async Task<string?> GetGlossaryPromptPart(FileReference glossary, string sourceContent)
+    [Action("(Batch) Translate", Description = "Translate file content retrieved from a CMS or file storage. Use in conjunction with a checkpoint to get the result of this long running batch job.")]
+    public async Task<StartBatchResponse> BatchTranslateContent(
+    [ActionParameter] TranslateFileRequest input,
+    [ActionParameter] PromptRequest promptRequest,
+    [ActionParameter, Display("Additional instructions", Description = "Specify additional instructions to be applied to the translation. For example, 'Cater to an older audience.'")] string? prompt,
+    [ActionParameter] GlossaryRequest glossary)
     {
-        var glossaryStream = await fileManagementClient.DownloadAsync(glossary);
-        var blackbirdGlossary = await glossaryStream.ConvertFromTbx();
+        var model = input.AIModel;
+        var stream = await fileManagementClient.DownloadAsync(input.File);
+        var content = await Transformation.Parse(stream, input.File.Name);
+        content.SourceLanguage ??= input.SourceLanguage;
+        content.TargetLanguage ??= input.TargetLanguage;
+        if (content.TargetLanguage == null) throw new PluginMisconfigurationException("The target language is not defined yet. Please assign the target language in this action.");
 
-        var glossaryPromptPart = new StringBuilder();
-        glossaryPromptPart.AppendLine();
-        glossaryPromptPart.AppendLine();
-        glossaryPromptPart.AppendLine("Glossary entries (each entry includes terms in different language. Each " +
-                                      "language may have a few synonymous variations which are separated by ;;):");
-
-        var entriesIncluded = false;
-        foreach (var entry in blackbirdGlossary.ConceptEntries)
+        if (content.SourceLanguage == null)
         {
-            var allTerms = entry.LanguageSections.SelectMany(x => x.Terms.Select(y => y.Term));
-            if (!allTerms.Any(x => Regex.IsMatch(sourceContent, $@"\b{x}\b", RegexOptions.IgnoreCase))) continue;
-            entriesIncluded = true;
+            content.SourceLanguage = await IdentifySourceLanguage(promptRequest, model, content.Source().GetPlaintext());
+        }
 
-            glossaryPromptPart.AppendLine();
-            glossaryPromptPart.AppendLine("\tEntry:");
+        var segments = content.GetSegments();
+        segments = segments.Where(x => !x.IsIgnorbale && x.IsInitial);
 
-            foreach (var section in entry.LanguageSections)
+        var glossaryStructure = await GlossaryHelper.ParseGlossary(fileManagementClient, glossary?.Glossary);
+
+        var jsonlMs = new MemoryStream();
+        using (var sw = new StreamWriter(jsonlMs, new UTF8Encoding(false), 1024, leaveOpen: true))
+        {
+            foreach (var pair in segments.Select((segment, index) => new { segment, index }))
             {
-                glossaryPromptPart.AppendLine(
-                    $"\t\t{section.LanguageCode}: {string.Join(";; ", section.Terms.Select(term => term.Term))}");
+                var glossaryPromptPart = GlossaryHelper.GetGlossaryPromptPart(glossaryStructure, pair.segment.GetSource());
+                var userPrompt = BuildPerUnitPrompt(pair.index.ToString(), pair.segment.GetSource(), $"Translate the following text from {content.SourceLanguage} to {content.TargetLanguage}. " + prompt, glossaryPromptPart);
+                var req = BatchHelper.BuildBatchRequestObject(userPrompt, SystemPrompt, promptRequest, input.AIModel);
+                var line = JsonConvert.SerializeObject(req, Formatting.None);
+                await sw.WriteLineAsync(line);
             }
         }
 
-        return entriesIncluded ? glossaryPromptPart.ToString() : null;
+        var job = await CreateBatchRequest(jsonlMs, input.AIModel);
+
+        return new StartBatchResponse
+        {
+            JobName = job.Name,
+            TransformationFile = await fileManagementClient.UploadAsync(content.Serialize().ToStream(), MediaTypes.Xliff, content.XliffFileName)
+        };
+    }
+
+    private static string BuildPerUnitPrompt(string id, string source, string? userInstruction, string? glossaryText)
+    {
+        var sb = new StringBuilder();
+        if (!string.IsNullOrWhiteSpace(userInstruction))
+            sb.AppendLine(userInstruction.Trim());
+        else
+            sb.AppendLine("Translate the text.");
+
+        sb.AppendLine();
+        if (!string.IsNullOrWhiteSpace(glossaryText))
+        {
+            sb.AppendLine("Use the following glossary where applicable to ensure terminology consistency:");
+            sb.AppendLine(glossaryText);
+            sb.AppendLine();
+        }
+
+        sb.AppendLine($"Text ID: {id}");
+        sb.Append("Source: ").AppendLine(source);
+        sb.AppendLine("Return ONLY the processed target text, prefixed with {ID:" + id + "} and nothing else.");
+
+        return sb.ToString();
     }
 
     [BlueprintActionDefinition(BlueprintAction.TranslateText)]
@@ -220,7 +257,7 @@ public class TranslationActions(InvocationContext invocationContext, IFileManage
 
         if (glossary.Glossary != null)
         {
-            var glossaryPromptPart = await GetGlossaryPromptPart(glossary.Glossary, input.Text);
+            var glossaryPromptPart = await GlossaryHelper.GetGlossaryPromptPart(fileManagementClient, glossary.Glossary, input.Text);
             if (glossaryPromptPart != null)
             {
                 userPrompt +=
