@@ -69,4 +69,35 @@ public class ReviewActionsTests : TestBase
         Assert.IsTrue(result.AverageScore > 0);
         Assert.IsTrue(result.Usage.TotalTokens > 0);
     }
+
+    [TestMethod]
+    public async Task Score_WithoutTranslations_ReturnsWithZeroes()
+    {
+        // Arrange
+        var model = new AIModelRequest { AIModel = ModelName };
+        var scoreRequest = new ScoreRequest
+        {
+            File = new FileReference { Name = "contentful.html" },
+            SourceLanguage = "en",
+            TargetLanguage = "fr",
+            Threshold = 99.0f,
+            NewState = SegmentStateHelper.Serialize(SegmentState.Reviewed),
+            SaveScores = true,
+        };
+        string? prompt = null;
+        var promptRequest = new PromptRequest
+        {
+            MaxOutputTokens = 2500
+        };
+
+        // Act
+        var result = await _actions.Score(model, scoreRequest, prompt, promptRequest);
+
+        // Assert
+        PrintResult(result);
+
+        Assert.IsNotNull(result.File);
+        Assert.AreEqual(0, result.AverageScore);
+        Assert.AreEqual(0, result.Usage.TotalTokens);
+    }
 }

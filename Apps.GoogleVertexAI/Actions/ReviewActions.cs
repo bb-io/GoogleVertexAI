@@ -46,7 +46,7 @@ public class ReviewActions(InvocationContext invocationContext, IFileManagementC
             .ToList() ?? [SegmentState.Initial, SegmentState.Translated];
         var segmentsToEstimate = transformation
             .GetSegments()
-            .Where(s => !string.IsNullOrEmpty(s.Id) && !string.IsNullOrEmpty(s.GetSource()) && !string.IsNullOrEmpty(s.GetTarget()))
+            .Where(s => !string.IsNullOrEmpty(s.GetSource()) && !string.IsNullOrEmpty(s.GetTarget()))
             .Where(s => statesToEstimate.Contains(s.State ?? SegmentState.Initial))
             .ToList();
         var batches = segmentsToEstimate.Batch(bucketSize ?? 1500);
@@ -56,8 +56,19 @@ public class ReviewActions(InvocationContext invocationContext, IFileManagementC
         var sourceLanguage = input.SourceLanguage ?? transformation.SourceLanguage;
         var targetLanguage = input.TargetLanguage ?? transformation.TargetLanguage;
 
-        var results = new Dictionary<string, float>();
+        var results = new Dictionary<int, float>();
         var usage = new UsageDto();
+
+        if (segmentsToEstimate.Count == 0)
+        {
+            return new ScoreXliffResponse
+            {
+                File = input.File,
+                AverageScore = 0,
+                SegmentsEstimated = 0,
+                Usage = usage,
+            };
+        }
 
         foreach (var batch in batches)
         {
@@ -66,12 +77,12 @@ public class ReviewActions(InvocationContext invocationContext, IFileManagementC
 
             var userPrompt =
                 $"Your input is going to be a group of sentences in {sourceLanguage} and their translation into {targetLanguage}. " +
-                "Only provide as output the ID of the sentence and the score number as a comma separated array of tuples. " +
+                "Only provide as output the index of the sentence and the score number as a comma separated array of tuples. " +
                 $"Place the tuples in a same line and separate them using semicolons, example for two assessments: `2,7.0;32,50.0`. The score number is a score from 1.0 to 100.0 assessing the quality of the translation, considering the following criteria: {criteriaPrompt}. Sentences: ";
 
             foreach (var segment in batch)
             {
-                userPrompt += $"{segment.Id}: {segment.GetSource()} -> {segment.GetTarget()}\n";
+                userPrompt += $"{segmentsToEstimate.IndexOf(segment)}: {segment.GetSource()} -> {segment.GetTarget()}\n";
             }
 
             var (result, promptUsage) = await ExecuteGeminiPrompt(promptRequest, model.AIModel, userPrompt, systemPrompt);
@@ -82,10 +93,13 @@ public class ReviewActions(InvocationContext invocationContext, IFileManagementC
             {
                 foreach (var r in result.Split(";"))
                 {
+                    if (string.IsNullOrWhiteSpace(r))
+                        continue;
+
                     var split = r.Split(",");
-                    var id = split[0].Trim();
+                    var index = int.Parse(split[0].Trim());
                     var score = float.Parse(split[1].Trim());
-                    results.Add(id, score);
+                    results.Add(index, score);
                 }
             }
             catch (Exception ex)
@@ -111,19 +125,16 @@ public class ReviewActions(InvocationContext invocationContext, IFileManagementC
         };
         XNamespace itsNamespace = "http://www.w3.org/2005/11/its";
 
-        foreach (var segment in segmentsToEstimate)
+        foreach (var result in results)
         {
-            float score;
+            var segment = segmentsToEstimate[result.Key];
 
-            if (!results.TryGetValue(segment.Id!, out score))
-                continue;
-
-            if (input.Threshold != null && isPassingTreshold(score) && newSegmentState != null)
+            if (input.Threshold != null && isPassingTreshold(result.Value) && newSegmentState != null)
                 segment.State = newSegmentState;
 
             if (ShouldSaveScores)
             {
-                segment.TargetAttributes.Add(new XAttribute(itsNamespace + "locQualityRatingScore", score.ToString()));
+                segment.TargetAttributes.Add(new XAttribute(itsNamespace + "locQualityRatingScore", result.Value.ToString()));
 
                 if (input.Threshold != null)
                     segment.TargetAttributes.Add(new XAttribute(itsNamespace + "locQualityRatingScoreThreshold", input.Threshold.ToString() ?? "0.0"));
@@ -136,6 +147,7 @@ public class ReviewActions(InvocationContext invocationContext, IFileManagementC
         {
             File = await fileManagementClient.UploadAsync(rewrittenXliff.ToStream(), "application/xliff+xml", input.File.Name),
             AverageScore = results.Average(x => x.Value),
+            SegmentsEstimated = results.Count,
             Usage = usage,
         };
     }

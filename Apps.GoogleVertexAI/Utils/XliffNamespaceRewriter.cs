@@ -8,11 +8,11 @@ public static class XliffNamespaceRewriter
     /// <summary>
     /// Temporary solution to add the ITS namespace once per file until we add this to the Filters library.
     /// </summary>
-    /// <param name="xmlInput">XLIFF string with ITS namespace declared per element.</param>
+    /// <param name="xliffInput">XLIFF string with ITS namespace declared per element.</param>
     /// <returns>XLIFF string with ITS declared once per file.</returns>
-    public static string RewriteTargets(string xmlInput)
+    public static string RewriteTargets(string xliffInput)
     {
-        var doc = XDocument.Parse(xmlInput, LoadOptions.PreserveWhitespace);
+        var doc = XDocument.Parse(xliffInput, LoadOptions.PreserveWhitespace);
 
         XNamespace itsNs = "http://www.w3.org/2005/11/its";
 
@@ -58,7 +58,7 @@ public static class XliffNamespaceRewriter
             OmitXmlDeclaration = false,
             Indent = true,
             IndentChars = "  ",
-            NewLineHandling = NewLineHandling.None
+            NewLineHandling = NewLineHandling.Replace,
         };
 
         using var sw = new System.IO.MemoryStream();
