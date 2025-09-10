@@ -17,7 +17,7 @@ public class ScoreResponse
     [Display("Total units under threshold")]
     public int TotalUnitsUnderThreshhold { get; set; }
 
-    [Display("Total segments finalized")]
+    [Display("Total segments finalized (unit can have multiple segments)")]
     public int TotalSegmentsFinalized { get; set; }
 
     [Display("Average score")]

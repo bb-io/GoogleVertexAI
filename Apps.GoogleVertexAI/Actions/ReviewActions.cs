@@ -20,7 +20,7 @@ namespace Apps.GoogleVertexAI.Actions;
 public class ReviewActions(InvocationContext invocationContext, IFileManagementClient fileManagementClient)
     : VertexAiInvocable(invocationContext)
 {
-    [Action("Score segments", Description = "Gets segment and file level quality scores for XLIFF files")]
+    [Action("Evaluate", Description = "Evaluates unit and file level translation quality for XLIFF files.")]
     public async Task<ScoreResponse> Score(
         [ActionParameter] AIModelRequest model,
         [ActionParameter] ScoreRequest input,
@@ -28,7 +28,6 @@ public class ReviewActions(InvocationContext invocationContext, IFileManagementC
         [ActionParameter] PromptRequest promptRequest,
         [ActionParameter, Display("Bucket size", Description = "Specify the number of translation units to be processed at once. Default value: 1500. (See our documentation for an explanation)")] int? bucketSize = 1500)
     {
-        // TODO Apply agreements made on standup
         var fileStream = await fileManagementClient.DownloadAsync(input.File);
         Transformation transformation; 
         
@@ -166,7 +165,7 @@ public class ReviewActions(InvocationContext invocationContext, IFileManagementC
             TotalUnitsUnderThreshhold = totalUnitsUnderThreshhold,
             TotalSegmentsFinalized = totalSegmentsFinalized,
             AverageScore = totalUnitsProcessed > 0 ? (totalScore / totalUnitsProcessed) : totalScore,
-            PercentageUnitsUnderThreshold = totalUnitsProcessed > 0 ? ((double)totalUnitsUnderThreshhold / (double)totalUnitsProcessed) : totalUnitsUnderThreshhold,
+            PercentageUnitsUnderThreshold = totalUnitsProcessed > 0 ? ((double)totalUnitsUnderThreshhold / (double)totalUnitsProcessed) * 100 : totalUnitsUnderThreshhold,
             Usage = usage,
         };
     }
