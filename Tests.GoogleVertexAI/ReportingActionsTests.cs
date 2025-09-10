@@ -10,8 +10,8 @@ public class ReportingActionsTests : TestBase
 {
     private ReportingActions _actions => new(InvocationContext, FileManager);
 
-    private const string ModelName = "gemini-2.5-flash-lite";
-    private const string TestFileName = "contentful.html.xlf";
+    private const string ModelName = "gemini-2.5-flash";
+    private const string TestFileName = "contentful_2.xlf";
 
     [TestMethod]
     public async Task Valid_xliff_returns_MQM_report()
@@ -27,7 +27,7 @@ public class ReportingActionsTests : TestBase
             new GlossaryRequest(),
             new PromptRequest
             {
-                MaxOutputTokens = 2500
+                
             }, 
             null, 
             null
