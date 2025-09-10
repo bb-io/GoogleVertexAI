@@ -14,7 +14,7 @@ namespace Tests.GoogleVertexAI;
 [TestClass]
 public class TranslateActionsTests : TestBase
 {
-    private const string ModelName = "gemini-2.5-flash";
+    private const string ModelName = "gemini-2.5-flash-lite";
 
     [TestMethod]
     public async Task Translate_html()

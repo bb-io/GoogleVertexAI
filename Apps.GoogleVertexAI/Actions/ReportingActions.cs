@@ -7,9 +7,13 @@ using Blackbird.Applications.Sdk.Common;
 using Blackbird.Applications.Sdk.Common.Actions;
 using Blackbird.Applications.Sdk.Common.Exceptions;
 using Blackbird.Applications.Sdk.Common.Invocation;
+using Blackbird.Applications.Sdk.Glossaries.Utils.Dtos;
 using Blackbird.Applications.SDK.Extensions.FileManagement.Interfaces;
 using Blackbird.Filters.Enums;
 using Blackbird.Filters.Transformations;
+using Google.Cloud.AIPlatform.V1;
+using Newtonsoft.Json;
+using System.Text;
 using System.Text.Json;
 
 namespace Apps.GoogleVertexAI.Actions;
@@ -17,18 +21,8 @@ namespace Apps.GoogleVertexAI.Actions;
 [ActionList("Reporting")]
 public class ReportingActions(InvocationContext invocationContext, IFileManagementClient fileManagementClient) : VertexAiInvocable(invocationContext)
 {
-    [Action("Create MQM report", Description = "Perform an LQA Analysis on a translated file. The result will be in the MQM framework form.")]
-    public async Task<GetMQMResponse> GenerateMQMReport(
-        [ActionParameter] GetTranslationIssuesRequest input,
-        [ActionParameter] GlossaryRequest glossary,
-        [ActionParameter] PromptRequest promptRequest,
-        [ActionParameter][Display("Additional prompt instructions")] string? AdditionalPrompt,
-        [ActionParameter][Display("System prompt (fully replaces MQM instructions)")] string? customSystemPrompt)
+    private async Task<(string userPrompt, string systemPrompt)> CreatePrompts(GetTranslationIssuesRequest input, string? customSystemPrompt, GlossaryRequest glossary, string? additionalPrompt, Transformation content)
     {
-        var stream = await fileManagementClient.DownloadAsync(input.File);
-        var content = await Transformation.Parse(stream, input.File.Name);
-        var model = input.AIModel;
-
         var sourceLanguage = input.SourceLanguage ?? content.SourceLanguage;
         var targetLanguage = input.TargetLanguage ?? content.TargetLanguage;
         var allTranslationIssues = new List<XliffIssueDto>();
@@ -53,14 +47,14 @@ public class ReportingActions(InvocationContext invocationContext, IFileManageme
                 "along with terminology problems not related to the glossary. ";
         }
 
-        if (!String.IsNullOrEmpty(AdditionalPrompt))
+        if (!String.IsNullOrEmpty(additionalPrompt))
         {
-            systemPrompt += AdditionalPrompt;
+            systemPrompt += additionalPrompt;
         }
 
         var unitsToProcess = content.GetSegments().Where(x => x.State > 0).Where(x => (input.PostEditLockedSegments.HasValue && input.PostEditLockedSegments.Value) ? x.State != SegmentState.Final : true);
 
-        var tuJson = JsonSerializer.Serialize(
+        var tuJson = System.Text.Json.JsonSerializer.Serialize(
           unitsToProcess.Select(x => new { x.Id, Source = x.GetSource(), Target = x.GetTarget() }),
           new JsonSerializerOptions { WriteIndented = true });
 
@@ -76,6 +70,23 @@ public class ReportingActions(InvocationContext invocationContext, IFileManageme
                 userPrompt = userPrompt + glossaryPromptPart;
             }
         }
+
+        return (userPrompt, systemPrompt);
+    }
+
+    [Action("Create MQM report", Description = "Perform an LQA Analysis on a translated file. The result will be in the MQM framework form.")]
+    public async Task<GetMQMResponse> GenerateMQMReport(
+        [ActionParameter] GetTranslationIssuesRequest input,
+        [ActionParameter] GlossaryRequest glossary,
+        [ActionParameter] PromptRequest promptRequest,
+        [ActionParameter][Display("Additional prompt instructions")] string? additionalPrompt,
+        [ActionParameter][Display("System prompt (fully replaces MQM instructions)")] string? customSystemPrompt)
+    {
+        var stream = await fileManagementClient.DownloadAsync(input.File);
+        var content = await Transformation.Parse(stream, input.File.Name);
+        var model = input.AIModel;
+
+        var (userPrompt, systemPrompt) = await CreatePrompts(input, customSystemPrompt, glossary, additionalPrompt, content);
 
         string response = "";
         var promptUsage = new UsageDto();
@@ -93,6 +104,36 @@ public class ReportingActions(InvocationContext invocationContext, IFileManageme
             Report = response,
             Usage = promptUsage,
             SystemPrompt = systemPrompt
+        };
+
+    }
+
+    [Action("Create MQM report in background", Description = "Perform an LQA Analysis on a translated file. Use in conjunction with a checkpoint to get the result of this long running background job.")]
+    public async Task<BatchIdentifier> GenerateMQMReportInBackground(
+    [ActionParameter] GetTranslationIssuesRequest input,
+    [ActionParameter] GlossaryRequest glossary,
+    [ActionParameter] PromptRequest promptRequest,
+    [ActionParameter][Display("Additional prompt instructions")] string? additionalPrompt,
+    [ActionParameter][Display("System prompt (fully replaces MQM instructions)")] string? customSystemPrompt)
+    {
+        var stream = await fileManagementClient.DownloadAsync(input.File);
+        var content = await Transformation.Parse(stream, input.File.Name);
+
+        var (userPrompt, systemPrompt) = await CreatePrompts(input, customSystemPrompt, glossary, additionalPrompt, content);
+
+        var jsonlMs = new MemoryStream();
+        using (var sw = new StreamWriter(jsonlMs, new UTF8Encoding(false), 1024, leaveOpen: true))
+        {
+            var req = BatchHelper.BuildBatchRequestObject(userPrompt, systemPrompt, promptRequest, input.AIModel);
+            var line = JsonConvert.SerializeObject(req, Formatting.None);
+            await sw.WriteLineAsync(line);
+        }
+
+        var job = await CreateBatchRequest(jsonlMs, input.AIModel);
+
+        return new BatchIdentifier
+        {
+            JobName = job.Name
         };
 
     }

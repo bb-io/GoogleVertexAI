@@ -126,7 +126,7 @@ public class EditActions(InvocationContext invocationContext, IFileManagementCli
 
     }
 
-    [Action("(Batch) Edit", Description = "Edit file content retrieved from a CMS or file storage. Use in conjunction with a checkpoint to get the result of this long running batch job.")]
+    [Action("Edit in background", Description = "Edit file content retrieved from a CMS or file storage. Use in conjunction with a checkpoint to get the result of this long running background job.")]
     public async Task<StartBatchResponse> BatchEditContent(
         [ActionParameter] EditFileRequest input,
         [ActionParameter] PromptRequest promptRequest,
@@ -159,6 +159,8 @@ public class EditActions(InvocationContext invocationContext, IFileManagementCli
         }
 
         var job = await CreateBatchRequest(jsonlMs, input.AIModel);
+
+        content.MetaData.Add(new Metadata("background-type", "edit") { Category = [Meta.Categories.Blackbird] });
 
         return new StartBatchResponse
         {
