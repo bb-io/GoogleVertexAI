@@ -12,15 +12,14 @@ using Blackbird.Filters.Enums;
 using Blackbird.Filters.Extensions;
 using Blackbird.Filters.Transformations;
 using MoreLinq;
-using System.Xml.Linq;
 
 namespace Apps.GoogleVertexAI.Actions;
 
-[ActionList("Review")]
+[ActionList("Quality estimation")]
 public class ReviewActions(InvocationContext invocationContext, IFileManagementClient fileManagementClient)
     : VertexAiInvocable(invocationContext)
 {
-    [Action("Evaluate", Description = "Evaluates unit and file level translation quality for XLIFF files.")]
+    [Action("Quality estimation (experimental)", Description = "Evaluates unit and file level translation quality for XLIFF files.")]
     public async Task<ScoreResponse> Score(
         [ActionParameter] AIModelRequest model,
         [ActionParameter] ScoreRequest input,
