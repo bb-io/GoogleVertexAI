@@ -1,8 +1,10 @@
-﻿using Apps.GoogleVertexAI.Invocables;
+﻿using Apps.GoogleVertexAI.Helpers;
+using Apps.GoogleVertexAI.Invocables;
 using Apps.GoogleVertexAI.Models.Requests;
 using Apps.GoogleVertexAI.Models.Response;
 using Blackbird.Applications.Sdk.Common;
 using Blackbird.Applications.Sdk.Common.Actions;
+using Blackbird.Applications.Sdk.Common.Exceptions;
 using Blackbird.Applications.Sdk.Common.Files;
 using Blackbird.Applications.Sdk.Common.Invocation;
 using Blackbird.Applications.Sdk.Glossaries.Utils.Converters;
@@ -39,7 +41,7 @@ public class EditActions(InvocationContext invocationContext, IFileManagementCli
         var counter = 1;        
         var errorMessages = new List<string>();
 
-        async Task<IEnumerable<string?>> BatchTranslate(IEnumerable<Segment> batch)
+        async Task<IEnumerable<string?>> BatchEdit(IEnumerable<Segment> batch)
         {
             var json = JsonConvert.SerializeObject(batch.Select((x, i) => "{ID:" + i + "}" + x.GetSource()));
 
@@ -47,7 +49,7 @@ public class EditActions(InvocationContext invocationContext, IFileManagementCli
             if (glossary?.Glossary != null)
             {
                 var glossaryPromptPart =
-                    await GetGlossaryPromptPart(glossary.Glossary,
+                    await GlossaryHelper.GetGlossaryPromptPart(fileManagementClient, glossary.Glossary,
                         string.Join(';', batch.Select(x => x.Source)) + ";" +
                         string.Join(';', batch.Select(x => x.Target)));
                 if (glossaryPromptPart != null)
@@ -92,7 +94,7 @@ public class EditActions(InvocationContext invocationContext, IFileManagementCli
         segments = segments.Where(x => !x.IsIgnorbale && x.State == SegmentState.Translated);
         result.TotalSegmentsReviewed = segments.Count();
 
-        var processedBatches = await segments.Batch(batchSize).Process(BatchTranslate);
+        var processedBatches = await segments.Batch(batchSize).Process(BatchEdit);
         result.ProcessedBatchesCount = counter - 1;
 
         var updatedCount = 0;
@@ -124,35 +126,79 @@ public class EditActions(InvocationContext invocationContext, IFileManagementCli
 
     }
 
-    private async Task<string?> GetGlossaryPromptPart(FileReference glossary, string sourceContent)
+    [Action("(Batch) Edit", Description = "Edit file content retrieved from a CMS or file storage. Use in conjunction with a checkpoint to get the result of this long running batch job.")]
+    public async Task<StartBatchResponse> BatchEditContent(
+        [ActionParameter] EditFileRequest input,
+        [ActionParameter] PromptRequest promptRequest,
+        [ActionParameter, Display("Additional instructions", Description = "Specify additional instructions to be applied to the translation. For example, 'Cater to an older audience.'")] string? prompt,
+        [ActionParameter] GlossaryRequest glossary)
     {
-        var glossaryStream = await fileManagementClient.DownloadAsync(glossary);
-        var blackbirdGlossary = await glossaryStream.ConvertFromTbx();
+        var model = input.AIModel;
+        var stream = await fileManagementClient.DownloadAsync(input.File);
+        var content = await Transformation.Parse(stream, input.File.Name);
 
-        var glossaryPromptPart = new StringBuilder();
-        glossaryPromptPart.AppendLine();
-        glossaryPromptPart.AppendLine();
-        glossaryPromptPart.AppendLine("Glossary entries (each entry includes terms in different language. Each " +
-                                      "language may have a few synonymous variations which are separated by ;;):");
+        var segments = content.GetSegments();
+        segments = segments.Where(x => !x.IsIgnorbale && x.IsInitial);
 
-        var entriesIncluded = false;
-        foreach (var entry in blackbirdGlossary.ConceptEntries)
+        var glossaryStructure = await GlossaryHelper.ParseGlossary(fileManagementClient, glossary?.Glossary);
+
+        var systemPrompt = "You are a linguistic expert that should process the following texts according to the given instructions";
+
+        var jsonlMs = new MemoryStream();
+        using (var sw = new StreamWriter(jsonlMs, new UTF8Encoding(false), 1024, leaveOpen: true))
         {
-            var allTerms = entry.LanguageSections.SelectMany(x => x.Terms.Select(y => y.Term));
-            if (!allTerms.Any(x => Regex.IsMatch(sourceContent, $@"\b{x}\b", RegexOptions.IgnoreCase))) continue;
-            entriesIncluded = true;
-
-            glossaryPromptPart.AppendLine();
-            glossaryPromptPart.AppendLine("\tEntry:");
-
-            foreach (var section in entry.LanguageSections)
+            foreach (var pair in segments.Select((segment, index) => new { segment, index }))
             {
-                glossaryPromptPart.AppendLine(
-                    $"\t\t{section.LanguageCode}: {string.Join(";; ", section.Terms.Select(term => term.Term))}");
+                var glossaryPromptPart = GlossaryHelper.GetGlossaryPromptPart(glossaryStructure, pair.segment.GetSource());
+                var userPrompt = BuildPerUnitPostEditPrompt(
+                    pair.index.ToString(), pair.segment.GetSource(), pair.segment.GetTarget(), content.SourceLanguage, content.TargetLanguage, prompt, glossaryPromptPart);
+                var req = BatchHelper.BuildBatchRequestObject(userPrompt, systemPrompt, promptRequest, input.AIModel);
+                var line = JsonConvert.SerializeObject(req, Formatting.None);
+                await sw.WriteLineAsync(line);
             }
         }
 
-        return entriesIncluded ? glossaryPromptPart.ToString() : null;
+        var job = await CreateBatchRequest(jsonlMs, input.AIModel);
+
+        return new StartBatchResponse
+        {
+            JobName = job.Name,
+            TransformationFile = await fileManagementClient.UploadAsync(content.Serialize().ToStream(), MediaTypes.Xliff, content.XliffFileName)
+        };
+    }
+
+    private static string BuildPerUnitPostEditPrompt(string id, string source, string target, string? sourceLang, string? targetLang, string? userInstruction, string? glossaryText)
+    {
+        var sb = new StringBuilder();
+
+        if (sourceLang is not null && targetLang is not null)
+        {
+            sb.AppendLine($"Your input contains a source sentence in {sourceLang} and its translation into {targetLang}.");
+        }
+        
+        sb.AppendLine("Review and edit the translated target text so that it is a correct and accurate translation of the source text.");
+        sb.AppendLine("If you see XML tags in the source, include them in the target text and do not delete or modify them.");
+        if (!string.IsNullOrWhiteSpace(userInstruction))
+        {
+            sb.AppendLine();
+            sb.AppendLine("Additional instructions:");
+            sb.AppendLine(userInstruction.Trim());
+        }
+        if (!string.IsNullOrWhiteSpace(glossaryText))
+        {
+            sb.AppendLine();
+            sb.AppendLine("Use the following glossary where applicable to ensure terminology consistency:");
+            sb.AppendLine(glossaryText);
+        }
+
+        sb.AppendLine();
+        sb.AppendLine($"Text ID: {id}");
+        sb.AppendLine("Source: " + source);
+        sb.AppendLine("Current target: " + target);
+
+        sb.AppendLine($"Return ONLY the final target text in the format [ID:{id}]{{target}} and nothing else.");
+
+        return sb.ToString();
     }
 
     [BlueprintActionDefinition(BlueprintAction.EditText)]
@@ -190,7 +236,7 @@ public class EditActions(InvocationContext invocationContext, IFileManagementCli
 
         if (glossary.Glossary != null)
         {
-            var glossaryPromptPart = await GetGlossaryPromptPart(glossary.Glossary, input.SourceText);
+            var glossaryPromptPart = await GlossaryHelper.GetGlossaryPromptPart(fileManagementClient, glossary.Glossary, input.SourceText);
             if (glossaryPromptPart != null)
             {
                 userPrompt +=

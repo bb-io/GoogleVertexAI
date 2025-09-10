@@ -6,11 +6,14 @@ namespace Apps.GoogleVertexAI.Models.Response;
 
 public class ScoreXliffResponse
 {
-    public FileReference File { get; set; }
+    public FileReference File { get; set; } = new();
 
     [Display("Average Score")]
     public float AverageScore { get; set; }
 
+    [Display("Segments estimated")]
+    public int SegmentsEstimated { get; set; }
+
     [Display("Usage")]
-    public UsageDto Usage { get; set; }
+    public UsageDto Usage { get; set; } = new();
 }

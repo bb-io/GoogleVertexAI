@@ -1,7 +1,6 @@
 using Apps.GoogleVertexAI.DataSourceHandlers.Static;
 using Blackbird.Applications.Sdk.Common;
 using Blackbird.Applications.Sdk.Common.Dictionaries;
-using Blackbird.Applications.Sdk.Common.Dynamic;
 using Blackbird.Applications.Sdk.Common.Files;
 
 namespace Apps.GoogleVertexAI.Models.Requests;
@@ -23,11 +22,7 @@ public class GetTranslationIssuesRequest
     [Display("Target audience", Description = "Specify the target audience for the translation")]
     public string? TargetAudience { get; set; }
 
-    [Display("Process only segments with this state", Description = "Only translation units with this value in the target state will be processed")]
-    [StaticDataSource(typeof(XliffStateDataSourceHandler))]
-    public string? ProcessOnlyTargetState { get; set; }
-
-    [Display("Include locked segments", Description = "By default it set to false. If false, the LLM will not process the segments that are locked in the XLIFF file.")]
+    [Display("Include finalized segments", Description = "By default it set to false. If false, the LLM will not process the segments that are locked or set to final.")]
     public bool? PostEditLockedSegments { get; set; }
 
 }

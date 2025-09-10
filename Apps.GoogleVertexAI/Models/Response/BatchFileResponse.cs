@@ -4,7 +4,7 @@ using Blackbird.Applications.Sdk.Common.Files;
 
 namespace Apps.GoogleVertexAI.Models.Response;
 
-public class TranslateXliffResponse
+public class BatchFileResponse
 {
     [Display("Tranlated file")]
     public FileReference File { get; set; } = new();
