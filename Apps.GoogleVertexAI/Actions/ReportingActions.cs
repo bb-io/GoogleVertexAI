@@ -17,7 +17,7 @@ namespace Apps.GoogleVertexAI.Actions;
 [ActionList("Reporting")]
 public class ReportingActions(InvocationContext invocationContext, IFileManagementClient fileManagementClient) : VertexAiInvocable(invocationContext)
 {
-    [Action("Generate MQM report", Description = "Perform an LQA Analysis on a translated file. The result will be in the MQM framework form.")]
+    [Action("Create MQM report", Description = "Perform an LQA Analysis on a translated file. The result will be in the MQM framework form.")]
     public async Task<GetMQMResponse> GenerateMQMReport(
         [ActionParameter] GetTranslationIssuesRequest input,
         [ActionParameter] GlossaryRequest glossary,
