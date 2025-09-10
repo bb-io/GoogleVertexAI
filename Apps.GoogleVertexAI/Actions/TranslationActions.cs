@@ -168,7 +168,7 @@ public class TranslationActions(InvocationContext invocationContext, IFileManage
         return result;
     }
 
-    [Action("(Batch) Translate", Description = "Translate file content retrieved from a CMS or file storage. Use in conjunction with a checkpoint to get the result of this long running batch job.")]
+    [Action("Translate in background", Description = "Translate file content retrieved from a CMS or file storage. Use in conjunction with a checkpoint to get the result of this long running background job.")]
     public async Task<StartBatchResponse> BatchTranslateContent(
     [ActionParameter] TranslateFileRequest input,
     [ActionParameter] PromptRequest promptRequest,
@@ -206,6 +206,8 @@ public class TranslationActions(InvocationContext invocationContext, IFileManage
         }
 
         var job = await CreateBatchRequest(jsonlMs, input.AIModel);
+
+        content.MetaData.Add(new Blackbird.Filters.Transformations.Metadata("background-type", "translate") { Category = [Meta.Categories.Blackbird]});
 
         return new StartBatchResponse
         {

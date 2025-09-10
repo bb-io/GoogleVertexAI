@@ -19,7 +19,7 @@ namespace Apps.GoogleVertexAI.Actions;
 public class ReviewActions(InvocationContext invocationContext, IFileManagementClient fileManagementClient)
     : VertexAiInvocable(invocationContext)
 {
-    [Action("Quality estimation (experimental)", Description = "Evaluates unit and file level translation quality for XLIFF files.")]
+    [Action("Quality estimation (experimental)", Description = "Evaluates unit and file level translation quality for translated files.")]
     public async Task<ScoreResponse> Score(
         [ActionParameter] AIModelRequest model,
         [ActionParameter] ScoreRequest input,

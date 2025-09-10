@@ -52,51 +52,35 @@ Before you can connect you need to make sure that:
 ### Translation
 
 - **Translate** translate file content retrieved from a CMS or file storage. The output can be used in compatible Blackbird interoperable actions.
+- **Translate in background** similar to the previous action, except that this creates a long running process in the background not blocking your parallel actions. Use in conjunction with a checkpoint to download the result file of this long running background job.
 - **Translate text** given a text and a locale, tries to create a localized version of the text.
 
 ### Editing
 
 - **Edit** Edit a translation. This action assumes you have previously translated content in Blackbird through any translation action. Only looks at translated segments and will change the segment state to reviewed.
+- **Edit in background** similar to the previous action, except that this creates a long running process in the background not blocking your parallel actions. Use in conjunction with a checkpoint to download the result file of this long running background job.
 - **Edit Text** given a source segment and translated target segment, responds with an edited version of the target segment taking into account typical mistakes.
 
-### Deprecated XLIFF
+### Reporting
 
-- **Get Quality Scores for XLIFF file** Gets segment and file level quality scores for XLIFF files. Optionally, you can add Threshold, New Target State and Condition input parameters to the Blackbird action to change the target state value of segments meeting the desired criteria (all three must be filled).
+- **Create MQM report** Perform an LQA Analysis of a translated XLIFF file. The result will be a text in the MQM framework form.
+- **Create MQM report in background** similar to the previous action, except that this creates a long running process in the background not blocking your parallel actions. Use in conjunction with a checkpoint to download the result of this long running background job.
 
-    Optional inputs:
-	- Prompt: Add your criteria for scoring each source-target pair. If none are provided, this is replaced by _"accuracy, fluency, consistency, style, grammar and spelling"_.
-	- Bucket size: Amount of translation units to process in the same request. (See dedicated section)
-	- Source and Target languages: By defualt, we get these values from the XLIFF header. You can provide different values, no specific format required. 
-	- Threshold: value between 0-10.
-	- Condition: Criteria to filter segments whose target state will be modified.
-	- New Target State: value to update target state to for filtered translation units.
+### Review
+- **Quality estimation (experimental)** evaluates unit and file level translation quality for translated files.
 
-    Output:
-	- Average Score: aggregated score of all segment level scores.
-	- Updated XLIFF file: segment level score added to extradata attribute & updated target state when instructed.
+### Background
+- **Download background file** use this action to get the output file when doing a translation or edit in the background.
+- **Get background result** use this action to get the output text when generating an MQM report in the backgorund.
 
-- **Post-edit XLIFF file** Updates the targets of XLIFF file
+## Events
 
-	Optional inputs:
-	- Prompt: Add your linguistic criteria for postediting targets.
-	- Bucket size: Amount of translation units to process in the same request. (See dedicated section)
-	- Source and Target languages: By default, we get these values from the XLIFF header. You can provide different values, no specific format required.
-	- Glossary
-
-- **Process XLIFF file** given an XLIFF file, processes each translation unit according to provided instructions (default is to translate source tags) and updates the target text for each unit.
-
-- **Get MQM report from XLIFF file** Perform an LQA Analysis of the translated XLIFF file. The result will be in the MQM framework form.
-
-- **Get translation issues from XLIFF file** Analyzes an XLIFF file to identify translation issues between source and target texts
-
-Note, that all XLIFF actions supports 1.2 and 2.1 versions of the XLIFF format, since these versions are the most commonly used in the industry. If you have a different version, please let us know and we will consider adding support for it.
-At the current moment models "gemini-2.5-pro-preview-03-25" supports global and us-central1 regions, "gemini-2.5-flash-preview-04-17" supports us-central1 region.
+### Background
+- **On background job finished** triggered when a background job finishes. Use this after stating any background job, then use the applicable action to get the results.
 
 ### Important Notes on XLIFF Processing
 
-> **Performance with Large XLIFF Files**: Based on our experience, Gemini models may struggle with XLIFF files containing more than 100 translation units. Performance can be inconsistent - sometimes working well but often producing hallucinations (returning only one translation unit when 50 were sent) or breaking formatting. For more reliable XLIFF processing, we recommend using alternatives like OpenAI or Azure OpenAI apps. Also, consider specifying a `Bucket size` of 15-20 or lower to ensure the model can handle the workload effectively.
-
-> **Optimizing Performance**: If you need to use Gemini for XLIFF processing, try adjusting the `Max output tokens` optional parameter. Setting this to the highest value available for your model may improve results, though be aware this will increase the cost of the action.
+> **Performance with Large XLIFF Files**: Based on our experience, Gemini models may struggle with XLIFF files containing more than 100 translation units. Performance can be inconsistent - sometimes working well but often producing hallucinations (returning only one translation unit when 50 were sent) or breaking formatting. For more reliable XLIFF processing, we recommend using background processing. Also, consider specifying a `Bucket size` of 15-20 or lower to ensure the model can handle the workload effectively.
 
 ### Bucket size, performance and cost
 

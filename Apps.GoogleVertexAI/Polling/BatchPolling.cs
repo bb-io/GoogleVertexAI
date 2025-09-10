@@ -17,12 +17,12 @@ using System.Threading.Tasks;
 
 namespace Apps.GoogleVertexAI.Polling
 {
-    [PollingEventList]
+    [PollingEventList("Background")]
     public class BatchPolling : VertexAiInvocable
     {
         public BatchPolling(InvocationContext invocationContext) : base(invocationContext) { }
 
-        [PollingEvent("On batch finished", "Triggered when a Vertex AI batch job reaches a terminal state (Succeeded/Failed/Cancelled).")]
+        [PollingEvent("On background job finished", "Triggered when a Vertex AI background job reaches a terminal state (Succeeded/Failed/Cancelled).")]
         public async Task<PollingEventResponse<BatchMemory, BatchStatusResponse>> OnBatchFinished(PollingEventRequest<BatchMemory> request,
             [PollingEventParameter] BatchIdentifier identifier)
         {
