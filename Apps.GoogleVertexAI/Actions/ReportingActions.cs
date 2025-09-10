@@ -42,7 +42,7 @@ public class ReportingActions(InvocationContext invocationContext, IFileManageme
                            "6. Audience appropriateness – errors arising from the use of content in the translation product that is invalid or inappropriate for the target locale or target audience. " +
                            "7. Design and markup – errors related to the physical design or presentation of a translation product, including character, paragraph, and UI element formatting and markup, integration of text with graphical elements, and overall page or window layout. " +
                            "Provide a quality rating for each dimension from 0 (completely bad) to 10 (perfect). You are an expert linguist and your task is to perform a Language Quality Assessment on input sentences. " +
-                           "Try to propose a fixed translation that would have no LQA errors. " +
+                           "Do not propose a fixed translation, only report on the errors. " +
                            "Formatting: use line spacing between each category. The category name should be bold. " : customSystemPrompt;
 
         if (glossary.Glossary != null)
