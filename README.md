@@ -82,7 +82,10 @@ Before you can connect you need to make sure that:
 
 > **Performance with Large XLIFF Files**: Based on our experience, Gemini models may struggle with XLIFF files containing more than 100 translation units. Performance can be inconsistent - sometimes working well but often producing hallucinations (returning only one translation unit when 50 were sent) or breaking formatting. For more reliable XLIFF processing, we recommend using background processing. Also, consider specifying a `Bucket size` of 15-20 or lower to ensure the model can handle the workload effectively.
 
-> **Following permisisions for batching needed**:  `aiplatform.batchPredictionJobs.create`, `aiplatform.batchPredictionJobs.get`, `storage.buckets.create`
+### Notes
+
+> **In order to work with background actions and events, following permissions are needed**:  `aiplatform.batchPredictionJobs.create`, `aiplatform.batchPredictionJobs.get`, `storage.buckets.create`
+
 
 ### Bucket size, performance and cost
 
