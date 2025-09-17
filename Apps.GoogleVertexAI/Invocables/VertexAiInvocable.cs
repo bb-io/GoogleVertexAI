@@ -97,6 +97,7 @@ public class VertexAiInvocable : BaseInvocable
                 Temperature = input.Temperature ?? 0.9f,
                 TopP = input.TopP ?? 1.0f,
                 TopK = input.TopK ?? 3,
+                MaxOutputTokens = input.MaxOutputTokens ?? ModelTokenService.GetMaxTokensForModel(modelId),
             },
             SafetySettings = { safetySettings },
             SystemInstruction = systemPrompt is null
