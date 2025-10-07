@@ -327,6 +327,4 @@ public class BatchActions(InvocationContext invocationContext, IFileManagementCl
 
         return false;
     }
-    private static string Truncate(string s, int max = 120)
-        => s.Length <= max ? s : s.Substring(0, max) + "…";
 }
