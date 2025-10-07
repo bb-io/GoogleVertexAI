@@ -5,6 +5,7 @@ using Apps.GoogleVertexAI.Invocables;
 using Apps.GoogleVertexAI.Models.Dto;
 using Apps.GoogleVertexAI.Models.Requests;
 using Apps.GoogleVertexAI.Models.Response;
+using Apps.GoogleVertexAI.Utils;
 using Blackbird.Applications.Sdk.Common;
 using Blackbird.Applications.Sdk.Common.Actions;
 using Blackbird.Applications.Sdk.Common.Exceptions;
@@ -62,10 +63,25 @@ public class BatchActions(InvocationContext invocationContext, IFileManagementCl
         if (!objects.Any())
             throw new PluginApplicationException("No JSONL outputs found in batch destination.");
 
+        var stream = await fileManagementClient.DownloadAsync(originalXliff.OriginalXliff);
+        var transformation = await Transformation.Parse(stream, originalXliff.OriginalXliff.Name);
+        var backgroundType = transformation.MetaData.FirstOrDefault(x => x.Type == "background-type")?.Value;
+        
+        var units = transformation.GetUnits();
+        var segments = transformation.GetSegments();
+        var originalSegments = backgroundType switch
+        {
+            "translate" => units.SelectMany(x => x.Segments).GetSegmentsForTranslation().ToList(),
+            "edit" => units.SelectMany(x => x.Segments).GetSegmentsForEditing().ToList(),
+            _ => units.SelectMany(x => x.Segments).Where(x => !x.IsIgnorbale).ToList()
+        };
+
         var translations = new Dictionary<string, string>();
         var usage = new UsageDto();
         var warnings = new List<string>();
-
+        var processedCount = 0;
+        var globalIndex = 0;
+        
         foreach (var obj in objects)
         {
             using var ms = new MemoryStream();
@@ -100,23 +116,66 @@ public class BatchActions(InvocationContext invocationContext, IFileManagementCl
 
                 var text = ExtractTextFromResponse(resp);
                 if (string.IsNullOrWhiteSpace(text)) continue;
+                
+                var matches = Regex.Matches(text, "\\{ID:(.*?)\\}(.*?)(?=\\{ID:|$)", 
+                    RegexOptions.Singleline);
+                
+                if (matches.Count == 0)
+                {
+                    try
+                    {
+                        var arrayResponse = GeminiResponseParser.ParseStringArray(text, InvocationContext.Logger);
+                        foreach (var item in arrayResponse.Results)
+                        {
+                            translations.Add(globalIndex.ToString(), item);
+                            globalIndex += 1;
+                        }
+                    }
+                    catch
+                    {
+                        var bracketMatches = Regex.Matches(text, "\\[ID:(.*?)\\]\\{(.*?)\\}",
+                            RegexOptions.Singleline);
+                        
+                        foreach (Match match in bracketMatches)
+                        {
+                            if (match.Success && !string.IsNullOrEmpty(match.Groups[1].Value))
+                            {
+                                var id = match.Groups[1].Value.Trim();
+                                var content = match.Groups[2].Value.Trim();
 
-                var m = Regex.Match(text, "\\{ID:(.*?)\\}(.+)$", RegexOptions.Singleline);
-                if (!m.Success) { warnings.Add("Cannot find ID prefix in: " + Truncate(text)); continue; }
+                                if (!translations.ContainsKey(id))
+                                {
+                                    translations[id] = content;
+                                    processedCount++;
+                                }
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    foreach (Match match in matches)
+                    {
+                        if (match.Success && !string.IsNullOrEmpty(match.Groups[1].Value))
+                        {
+                            var id = match.Groups[1].Value.Trim();
+                            var content = match.Groups[2].Value.Trim();
 
-                var id = m.Groups[1].Value.Trim();
-                var content = m.Groups[2].Value.Trim();
-                if (!translations.ContainsKey(id))
-                    translations[id] = content;
+                            if (!translations.ContainsKey(id))
+                            {
+                                translations[id] = content;
+                                processedCount++;
+                            }
+                        }
+                    }
+                }
             }
         }
-
-        var stream = await fileManagementClient.DownloadAsync(originalXliff.OriginalXliff);
-        var transformation = await Transformation.Parse(stream, originalXliff.OriginalXliff.Name);
-        var backgroundType = transformation.MetaData.FirstOrDefault(x => x.Type == "background-type")?.Value;
-
-
-        foreach (var pair in transformation.GetSegments().Where(x => !x.IsIgnorbale && x.IsInitial).Select((segment, index) => new { segment, index }))
+        
+        var totalSegmentsCount = segments.Count();
+        
+        var updatedCount = 0;
+        foreach (var pair in originalSegments.Select((segment, index) => new { segment, index }))
         {
             if (translations.TryGetValue(pair.index.ToString(), out var tgt))
             {                
@@ -124,23 +183,34 @@ public class BatchActions(InvocationContext invocationContext, IFileManagementCl
                 {
                     pair.segment.SetTarget(tgt);
                     pair.segment.State = SegmentState.Translated;
-                } else if (backgroundType == "edit")
+                    updatedCount++;
+                }
+                else if (backgroundType == "edit")
                 {
                     if (pair.segment.GetTarget() != tgt)
                     {
                         pair.segment.SetTarget(tgt);
+                        updatedCount++;
                     }
                     pair.segment.State = SegmentState.Reviewed;
-                } else
+                }
+                else
                 {
                     pair.segment.SetTarget(tgt);
+                    updatedCount++;
                 }
             }                
         }
 
         var outFile = await fileManagementClient.UploadAsync(transformation.Serialize().ToStream(), MediaTypes.Xliff, transformation.XliffFileName);
-
-        return new BatchFileResponse { File = outFile, Usage = usage, Warnings = warnings };
+        return new BatchFileResponse { 
+            File = outFile, 
+            Usage = usage, 
+            Warnings = warnings,
+            TotalSegmentsCount = totalSegmentsCount,
+            ProcessedSegmentsCount = processedCount,
+            UpdatedSegmentsCount = updatedCount
+        };
     }
 
     [Action("Get background result",
@@ -257,6 +327,4 @@ public class BatchActions(InvocationContext invocationContext, IFileManagementCl
 
         return false;
     }
-    private static string Truncate(string s, int max = 120)
-        => s.Length <= max ? s : s.Substring(0, max) + "…";
 }
