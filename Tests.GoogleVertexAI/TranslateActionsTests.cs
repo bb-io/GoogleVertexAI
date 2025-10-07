@@ -95,7 +95,7 @@ public class TranslateActionsTests : TestBase
         string? systemMessage = null;
         var glossaryRequest = new GlossaryRequest();
 
-        var startBatchResponse = await actions.BatchTranslateContent(translateRequest, new PromptRequest { }, systemMessage, glossaryRequest);
+        var startBatchResponse = await actions.BatchTranslateContent(translateRequest, new PromptRequest { }, systemMessage, glossaryRequest, new());
         Assert.IsNotNull(startBatchResponse);
         Console.WriteLine(startBatchResponse.JobName);
 

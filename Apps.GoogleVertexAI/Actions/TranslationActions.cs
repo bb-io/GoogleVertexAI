@@ -170,10 +170,11 @@ public class TranslationActions(InvocationContext invocationContext, IFileManage
 
     [Action("Translate in background", Description = "Translate file content retrieved from a CMS or file storage. Use in conjunction with a checkpoint to get the result of this long running background job.")]
     public async Task<StartBatchResponse> BatchTranslateContent(
-    [ActionParameter] TranslateFileRequest input,
-    [ActionParameter] PromptRequest promptRequest,
-    [ActionParameter, Display("Additional instructions", Description = "Specify additional instructions to be applied to the translation. For example, 'Cater to an older audience.'")] string? prompt,
-    [ActionParameter] GlossaryRequest glossary)
+        [ActionParameter] TranslateFileRequest input,
+        [ActionParameter] PromptRequest promptRequest,
+        [ActionParameter, Display("Additional instructions", Description = "Specify additional instructions to be applied to the translation. For example, 'Cater to an older audience.'")] string? prompt,
+        [ActionParameter] GlossaryRequest glossary, 
+        [ActionParameter] BucketRequest bucketRequest)
     {
         var model = input.AIModel;
         var stream = await fileManagementClient.DownloadAsync(input.File);
@@ -188,25 +189,66 @@ public class TranslationActions(InvocationContext invocationContext, IFileManage
         }
 
         var segments = content.GetSegments();
-        segments = segments.Where(x => !x.IsIgnorbale && x.IsInitial);
+        segments = segments.Where(x => !x.IsIgnorbale && x.IsInitial).ToList();
 
         var glossaryStructure = await GlossaryHelper.ParseGlossary(fileManagementClient, glossary?.Glossary);
 
         var jsonlMs = new MemoryStream();
         using (var sw = new StreamWriter(jsonlMs, new UTF8Encoding(false), 1024, leaveOpen: true))
         {
-            foreach (var pair in segments.Select((segment, index) => new { segment, index }))
+            // Get bucket size from bucketRequest
+            var bucketSize = bucketRequest.GetBucketSizeOrDefault();
+            
+            // Group segments into buckets
+            var segmentList = segments.ToList();
+            var bucketCount = 0;
+            
+            for (int i = 0; i < segmentList.Count; i += bucketSize)
             {
-                var glossaryPromptPart = GlossaryHelper.GetGlossaryPromptPart(glossaryStructure, pair.segment.GetSource());
-                var userPrompt = BuildPerUnitPrompt(pair.index.ToString(), pair.segment.GetSource(), $"Translate the following text from {content.SourceLanguage} to {content.TargetLanguage}. " + prompt, glossaryPromptPart);
-                var req = BatchHelper.BuildBatchRequestObject(userPrompt, SystemPrompt, promptRequest, input.AIModel);
+                var bucketSegments = segmentList.Skip(i).Take(bucketSize).ToList();
+                var userPrompt = new StringBuilder();
+                
+                userPrompt.AppendLine($"Translate the following texts from {content.SourceLanguage} to {content.TargetLanguage}. " +
+                                   "Please process ALL texts in the provided array. It is critical that you translate EVERY item individually, not just the first one. " +
+                                   "Return the outputs as a serialized JSON array of strings without additional formatting, " +
+                                   "maintaining the exact same number of elements as the input array. " +
+                                   "This is crucial because your response will be deserialized programmatically. " +
+                                   $"Do not skip any entries or provide partial results. {prompt}");
+                userPrompt.AppendLine();
+                
+                userPrompt.AppendLine("Original texts:");
+                
+                for (int j = 0; j < bucketSegments.Count; j++)
+                {
+                    var globalIndex = i + j;
+                    var sourceText = bucketSegments[j].GetSource();
+                    userPrompt.AppendLine($"{{ID:{globalIndex}}}{sourceText}");
+                }
+                
+                if (glossaryStructure != null)
+                {
+                    var combinedText = string.Join(" ", bucketSegments.Select(s => s.GetSource()));
+                    var glossaryPromptPart = GlossaryHelper.GetGlossaryPromptPart(glossaryStructure, combinedText);
+                    
+                    if (!string.IsNullOrWhiteSpace(glossaryPromptPart))
+                    {
+                        userPrompt.AppendLine();
+                        userPrompt.AppendLine("Enhance the target text by incorporating relevant terms from our glossary where applicable. " +
+                                            "Ensure that the translation aligns with the glossary entries for the respective languages. " +
+                                            "If a term has variations or synonyms, consider them and choose the most appropriate " +
+                                            "translation to maintain consistency and precision.");
+                        userPrompt.AppendLine(glossaryPromptPart);
+                    }
+                }
+                
+                var req = BatchHelper.BuildBatchRequestObject(userPrompt.ToString(), SystemPrompt, promptRequest, input.AIModel);
                 var line = JsonConvert.SerializeObject(req, Formatting.None);
                 await sw.WriteLineAsync(line);
+                bucketCount++;
             }
         }
 
         var job = await CreateBatchRequest(jsonlMs, input.AIModel);
-
         content.MetaData.Add(new Blackbird.Filters.Transformations.Metadata("background-type", "translate") { Category = [Meta.Categories.Blackbird]});
 
         return new StartBatchResponse

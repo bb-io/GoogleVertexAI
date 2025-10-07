@@ -131,7 +131,8 @@ public class EditActions(InvocationContext invocationContext, IFileManagementCli
         [ActionParameter] EditFileRequest input,
         [ActionParameter] PromptRequest promptRequest,
         [ActionParameter, Display("Additional instructions", Description = "Specify additional instructions to be applied to the translation. For example, 'Cater to an older audience.'")] string? prompt,
-        [ActionParameter] GlossaryRequest glossary)
+        [ActionParameter] GlossaryRequest glossary,
+        [ActionParameter] BucketRequest bucketRequest)
     {
         var model = input.AIModel;
         var stream = await fileManagementClient.DownloadAsync(input.File);
@@ -147,19 +148,62 @@ public class EditActions(InvocationContext invocationContext, IFileManagementCli
         var jsonlMs = new MemoryStream();
         using (var sw = new StreamWriter(jsonlMs, new UTF8Encoding(false), 1024, leaveOpen: true))
         {
-            foreach (var pair in segments.Select((segment, index) => new { segment, index }))
+            // Get bucket size from bucketRequest
+            var bucketSize = bucketRequest.GetBucketSizeOrDefault();
+            
+            // Group segments into buckets
+            var segmentList = segments.ToList();
+            var bucketCount = 0;
+            
+            for (int i = 0; i < segmentList.Count; i += bucketSize)
             {
-                var glossaryPromptPart = GlossaryHelper.GetGlossaryPromptPart(glossaryStructure, pair.segment.GetSource());
-                var userPrompt = BuildPerUnitPostEditPrompt(
-                    pair.index.ToString(), pair.segment.GetSource(), pair.segment.GetTarget(), content.SourceLanguage, content.TargetLanguage, prompt, glossaryPromptPart);
-                var req = BatchHelper.BuildBatchRequestObject(userPrompt, systemPrompt, promptRequest, input.AIModel);
+                var bucketSegments = segmentList.Skip(i).Take(bucketSize).ToList();
+                var userPrompt = new StringBuilder();
+                
+                userPrompt.AppendLine($"Your input consists of sentences in {content.SourceLanguage} language with their translations into {content.TargetLanguage}. " +
+                    "Review and edit the translated target text as necessary to ensure it is a correct and accurate translation of the source text. " +
+                    "If you see XML tags in the source also include them in the target text, don't delete or modify them. " +
+                    "Include only the target texts (updated or not) in the format [ID:X]{target}. " +
+                    $"Example: [ID:1]{{target1}},[ID:2]{{target2}}. {prompt}");
+                userPrompt.AppendLine();
+                
+                userPrompt.AppendLine("Please process ALL texts in the provided list. It is critical that you edit EVERY item individually.");
+                userPrompt.AppendLine("Sentences:");
+                
+                for (int j = 0; j < bucketSegments.Count; j++)
+                {
+                    var globalIndex = i + j;
+                    var sourceText = bucketSegments[j].GetSource();
+                    var targetText = bucketSegments[j].GetTarget();
+                    userPrompt.AppendLine($"ID: {globalIndex}; Source: {sourceText}; Target: {targetText}");
+                }
+                
+                // Add glossary if available
+                if (glossaryStructure != null)
+                {
+                    var combinedText = string.Join(" ", bucketSegments.Select(s => s.GetSource())) + " " +
+                                       string.Join(" ", bucketSegments.Select(s => s.GetTarget()));
+                    var glossaryPromptPart = GlossaryHelper.GetGlossaryPromptPart(glossaryStructure, combinedText);
+                    
+                    if (!string.IsNullOrWhiteSpace(glossaryPromptPart))
+                    {
+                        userPrompt.AppendLine();
+                        userPrompt.AppendLine("Enhance the target text by incorporating relevant terms from our glossary where applicable. " +
+                                            "Ensure that the translation aligns with the glossary entries for the respective languages. " +
+                                            "If a term has variations or synonyms, consider them and choose the most appropriate " +
+                                            "translation to maintain consistency and precision.");
+                        userPrompt.AppendLine(glossaryPromptPart);
+                    }
+                }
+                
+                var req = BatchHelper.BuildBatchRequestObject(userPrompt.ToString(), systemPrompt, promptRequest, input.AIModel);
                 var line = JsonConvert.SerializeObject(req, Formatting.None);
                 await sw.WriteLineAsync(line);
+                bucketCount++;
             }
         }
 
         var job = await CreateBatchRequest(jsonlMs, input.AIModel);
-
         content.MetaData.Add(new Metadata("background-type", "edit") { Category = [Meta.Categories.Blackbird] });
 
         return new StartBatchResponse

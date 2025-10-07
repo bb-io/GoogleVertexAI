@@ -70,7 +70,7 @@ public class EditActionTests : TestBase
         string? systemMessage = null;
         var glossaryRequest = new GlossaryRequest();
 
-        var startbatchResopnse = await actions.BatchEditContent(translateRequest, new PromptRequest { }, systemMessage, glossaryRequest);
+        var startbatchResopnse = await actions.BatchEditContent(translateRequest, new PromptRequest { }, systemMessage, glossaryRequest, new());
         Assert.IsNotNull(startbatchResopnse);
         Console.WriteLine(startbatchResopnse.JobName);
 
