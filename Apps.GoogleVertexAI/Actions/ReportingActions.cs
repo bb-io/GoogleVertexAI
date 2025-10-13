@@ -15,6 +15,7 @@ using Google.Cloud.AIPlatform.V1;
 using Newtonsoft.Json;
 using System.Text;
 using System.Text.Json;
+using Apps.GoogleVertexAI.Utils;
 
 namespace Apps.GoogleVertexAI.Actions;
 
@@ -83,7 +84,7 @@ public class ReportingActions(InvocationContext invocationContext, IFileManageme
         [ActionParameter][Display("System prompt (fully replaces MQM instructions)")] string? customSystemPrompt)
     {
         var stream = await fileManagementClient.DownloadAsync(input.File);
-        var content = await Transformation.Parse(stream, input.File.Name);
+        var content = await stream.ParseTransformationWithErrorHandling(input.File.Name);
         var model = input.AIModel;
 
         var (userPrompt, systemPrompt) = await CreatePrompts(input, customSystemPrompt, glossary, additionalPrompt, content);
