@@ -52,8 +52,7 @@ public class ReportingActions(InvocationContext invocationContext, IFileManageme
         {
             systemPrompt += additionalPrompt;
         }
-
-        var unitsToProcess = content.GetSegments().Where(x => x.State > 0).Where(x => (input.PostEditLockedSegments.HasValue && input.PostEditLockedSegments.Value) ? x.State != SegmentState.Final : true);
+        var unitsToProcess = content.GetSegments().Where(x => x.State > 0 || x.State is null).Where(x => (input.PostEditLockedSegments.HasValue && input.PostEditLockedSegments.Value) ? x.State != SegmentState.Final : true);
 
         var tuJson = System.Text.Json.JsonSerializer.Serialize(
           unitsToProcess.Select(x => new { x.Id, Source = x.GetSource(), Target = x.GetTarget() }),
