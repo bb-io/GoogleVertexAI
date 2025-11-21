@@ -6,6 +6,7 @@ public static class ModelTokenService
     {
         return modelName switch
         {
+            "gemini-3-pro-preview" => 65535,
             "gemini-2.5-pro" => 65535,
             "gemini-2.5-flash" => 65535,
             "gemini-2.5-flash-lite" => 65535,
