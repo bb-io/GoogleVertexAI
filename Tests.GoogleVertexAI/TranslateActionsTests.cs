@@ -1,11 +1,9 @@
 ﻿using Apps.GoogleVertexAI.Actions;
 using Apps.GoogleVertexAI.Models.Requests;
-using Apps.GoogleVertexAI.Models.Response;
 using Apps.GoogleVertexAI.Polling;
 using Apps.GoogleVertexAI.Polling.Model;
 using Blackbird.Applications.Sdk.Common.Files;
 using Blackbird.Applications.Sdk.Common.Polling;
-using Blackbird.Applications.SDK.Extensions.FileManagement.Interfaces;
 using GoogleVertexAI.Base;
 using Newtonsoft.Json;
 
@@ -14,7 +12,7 @@ namespace Tests.GoogleVertexAI;
 [TestClass]
 public class TranslateActionsTests : TestBase
 {
-    private const string ModelName = "gemini-2.5-flash-lite";
+    private const string ModelName = "gemini-3-pro-preview";
 
     [TestMethod]
     public async Task Translate_html()

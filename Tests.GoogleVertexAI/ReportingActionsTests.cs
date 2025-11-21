@@ -14,7 +14,7 @@ public class ReportingActionsTests : TestBase
 {
     private ReportingActions _actions => new(InvocationContext, FileManager);
 
-    private const string ModelName = "gemini-2.5-flash-lite";
+    private const string ModelName = "gemini-3-pro-preview";
     private const string TestFileName = "contentful_2.xlf";
 
     [TestMethod]
