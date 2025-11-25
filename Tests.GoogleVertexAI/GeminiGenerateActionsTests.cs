@@ -9,7 +9,7 @@ namespace Tests.GoogleVertexAI;
 [TestClass]
 public class GeminiGenerateActionsTests : TestBase
 {
-    private const string ModelName = "gemini-2.5-pro";
+    private const string ModelName = "gemini-3-pro-preview";
 
     private GeminiGenerateActions Actions => new(InvocationContext, FileManager);
 
