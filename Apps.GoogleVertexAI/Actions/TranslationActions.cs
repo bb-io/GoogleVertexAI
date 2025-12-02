@@ -87,8 +87,6 @@ public class TranslationActions(InvocationContext invocationContext, IFileManage
 
             var (response, promptUsage) = await ExecuteGeminiPrompt(promptRequest, model, userPrompt, SystemPrompt);
 
-            var results = new List<string?>();
-
             try
             {
                 var result = GeminiResponseParser.ParseStringArray(response, InvocationContext.Logger);
@@ -100,22 +98,7 @@ public class TranslationActions(InvocationContext invocationContext, IFileManage
                         "Try to reduce the batch size.");
                 }
 
-                foreach (var item in result.Results)
-                {
-                    var match = Regex.Match(item, "\\{ID:(.*?)\\}(.+)$");
-                    if (match.Success && !string.IsNullOrEmpty(match.Groups[1].Value))
-                    {
-                        var id = match.Groups[1].Value;
-                        var content = match.Groups[2].Value;
-
-                        results.Add(content);
-                    } else
-                    {
-                        results.Add(null);
-                    }
-                }
-
-                return results;
+                return result.Results;
             }
             catch (PluginApplicationException ex)
             {
