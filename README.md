@@ -61,6 +61,8 @@ Before you can connect you need to make sure that:
 - **Edit in background** similar to the previous action, except that this creates a long running process in the background not blocking your parallel actions. Use in conjunction with a checkpoint to download the result file of this long running background job.
 - **Edit Text** given a source segment and translated target segment, responds with an edited version of the target segment taking into account typical mistakes.
 
+- > Note: files are interoperable, under the hood Blackbird may convert to and from bilingual files with metadata but all our Actions are able to accept a lot of different file formats.
+
 ### Reporting
 
 - **Create MQM report** Perform an LQA Analysis of a translated XLIFF file. The result will be a text in the MQM framework form.
@@ -78,9 +80,19 @@ Before you can connect you need to make sure that:
 ### Background
 - **On background job finished** triggered when a background job finishes. Use this after stating any background job, then use the applicable action to get the results.
 
-### Important Notes on XLIFF Processing
+### Temperatures
 
-> **Performance with Large XLIFF Files**: Based on our experience, Gemini models may struggle with XLIFF files containing more than 100 translation units. Performance can be inconsistent - sometimes working well but often producing hallucinations (returning only one translation unit when 50 were sent) or breaking formatting. For more reliable XLIFF processing, we recommend using background processing. Also, consider specifying a `Bucket size` of 15-20 or lower to ensure the model can handle the workload effectively.
+Anthropic allows you to set the temperature value for and Action you perform in Blackbird. You can customize this value (between 0.0 and 1.0) but we've also added handy labels that are available in the Blackbird UI:
+
+- 0.1 Governed: Maximum predictability.
+- 0.3 Balanced: A controlled blend of accuracy and flexibility.
+- 0.5 Expressive: Accuracy is preserved, structure is looser (default).
+- 0.6 Exploratory: Encourages alternative phrasings and ideas while remaining context-aware.
+- 0.8 Experimental: Prioritizes creativity over predictability.
+
+### Important Notes on File Processing
+
+> **Performance with Large Files**: Based on our experience, Gemini models may struggle with files containing more than 100 translation units. Performance can be inconsistent - sometimes working well but often producing hallucinations (returning only one translation unit when 50 were sent) or breaking formatting. For more reliable XLIFF processing, we recommend using background processing. Also, consider specifying a `Bucket size` of 15-20 or lower to ensure the model can handle the workload effectively.
 
 ### Notes
 
@@ -89,7 +101,7 @@ Before you can connect you need to make sure that:
 
 ### Bucket size, performance and cost
 
-XLIFF files can contain a lot of segments. Each action takes your segments and sends them to the AI app for processing. It's possible that the amount of segments is so high that the prompt exceeds the model's context window or that the model takes longer than Blackbird actions are allowed to take. This is why we have introduced the bucket size parameter. You can tweak the bucket size parameter to determine how many segments to send to the AI model at once. This will allow you to split the workload into different API calls. The trade-off is that the same context prompt needs to be send along with each request (which increases the tokens used). From experiments we have found that a bucket size of 1500 is sufficient for models like gpt-4o. That's why 1500 is the default bucket size, however other models may require different bucket sizes.
+Files can contain a lot of segments. Each action takes your segments and sends them to the AI app for processing. It's possible that the amount of segments is so high that the prompt exceeds the model's context window or that the model takes longer than Blackbird actions are allowed to take. This is why we have introduced the bucket size parameter. You can tweak the bucket size parameter to determine how many segments to send to the AI model at once. This will allow you to split the workload into different API calls. The trade-off is that the same context prompt needs to be send along with each request (which increases the tokens used). From experiments we have found that a bucket size of 1500 is sufficient for models like gpt-4o. That's why 1500 is the default bucket size, however other models may require different bucket sizes.
 
 ## Feedback
 
