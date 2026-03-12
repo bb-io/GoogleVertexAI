@@ -1,6 +1,5 @@
 using Apps.GoogleVertexAI.DataSourceHandlers;
 using Apps.GoogleVertexAI.DataSourceHandlers.FloatParameterHandlers;
-using Apps.GoogleVertexAI.DataSourceHandlers.Static;
 using Blackbird.Applications.Sdk.Common;
 using Blackbird.Applications.Sdk.Common.Dictionaries;
 using Blackbird.Applications.Sdk.Common.Dynamic;
@@ -13,7 +12,7 @@ public class PromptRequest
                                           "Lower temperatures are good for prompts that require a more " +
                                           "deterministic and less open-ended or creative response, while " +
                                           "higher temperatures can lead to more diverse or creative results.")]
-    [DataSource(typeof(TemperatureDataSourceHandler))]
+    [StaticDataSource(typeof(TemperatureDataSourceHandler))]
     public float? Temperature { get; set; }
 
     [Display("Max output tokens", Description = "Maximum number of tokens that can be generated in the response. " +
