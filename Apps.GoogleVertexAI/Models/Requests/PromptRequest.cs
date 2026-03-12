@@ -1,6 +1,5 @@
 using Apps.GoogleVertexAI.DataSourceHandlers;
 using Apps.GoogleVertexAI.DataSourceHandlers.FloatParameterHandlers;
-using Apps.GoogleVertexAI.DataSourceHandlers.Static;
 using Blackbird.Applications.Sdk.Common;
 using Blackbird.Applications.Sdk.Common.Dictionaries;
 using Blackbird.Applications.Sdk.Common.Dynamic;

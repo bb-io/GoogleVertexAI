@@ -69,20 +69,23 @@ Before you can connect you need to make sure that:
 - **Create MQM report in background** similar to the previous action, except that this creates a long running process in the background not blocking your parallel actions. Use in conjunction with a checkpoint to download the result of this long running background job.
 
 ### Review
+
 - **Quality estimation (experimental)** evaluates unit and file level translation quality for translated files.
 
 ### Background
+
 - **Download background file** use this action to get the output file when doing a translation or edit in the background.
 - **Get background result** use this action to get the output text when generating an MQM report in the backgorund.
 
 ## Events
 
 ### Background
+
 - **On background job finished** triggered when a background job finishes. Use this after stating any background job, then use the applicable action to get the results.
 
 ### Temperatures
 
-Anthropic allows you to set the temperature value for and Action you perform in Blackbird. You can customize this value (between 0.0 and 1.0) but we've also added handy labels that are available in the Blackbird UI:
+Gemini allows you to set the temperature value for and Action you perform in Blackbird. You can customize this value (between 0.0 and 1.0) but we've also added handy labels that are available in the Blackbird UI:
 
 - 0.1 Governed: Maximum predictability.
 - 0.3 Balanced: A controlled blend of accuracy and flexibility.

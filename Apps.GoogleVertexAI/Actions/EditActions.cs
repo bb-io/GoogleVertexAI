@@ -4,10 +4,7 @@ using Apps.GoogleVertexAI.Models.Requests;
 using Apps.GoogleVertexAI.Models.Response;
 using Blackbird.Applications.Sdk.Common;
 using Blackbird.Applications.Sdk.Common.Actions;
-using Blackbird.Applications.Sdk.Common.Exceptions;
-using Blackbird.Applications.Sdk.Common.Files;
 using Blackbird.Applications.Sdk.Common.Invocation;
-using Blackbird.Applications.Sdk.Glossaries.Utils.Converters;
 using Blackbird.Applications.SDK.Blueprints;
 using Blackbird.Applications.SDK.Extensions.FileManagement.Interfaces;
 using Blackbird.Filters.Constants;
@@ -212,41 +209,7 @@ public class EditActions(InvocationContext invocationContext, IFileManagementCli
             TransformationFile = await fileManagementClient.UploadAsync(content.Serialize().ToStream(), MediaTypes.Xliff, content.XliffFileName)
         };
     }
-
-    private static string BuildPerUnitPostEditPrompt(string id, string source, string target, string? sourceLang, string? targetLang, string? userInstruction, string? glossaryText)
-    {
-        var sb = new StringBuilder();
-
-        if (sourceLang is not null && targetLang is not null)
-        {
-            sb.AppendLine($"Your input contains a source sentence in {sourceLang} and its translation into {targetLang}.");
-        }
         
-        sb.AppendLine("Review and edit the translated target text so that it is a correct and accurate translation of the source text.");
-        sb.AppendLine("If you see XML tags in the source, include them in the target text and do not delete or modify them.");
-        if (!string.IsNullOrWhiteSpace(userInstruction))
-        {
-            sb.AppendLine();
-            sb.AppendLine("Additional instructions:");
-            sb.AppendLine(userInstruction.Trim());
-        }
-        if (!string.IsNullOrWhiteSpace(glossaryText))
-        {
-            sb.AppendLine();
-            sb.AppendLine("Use the following glossary where applicable to ensure terminology consistency:");
-            sb.AppendLine(glossaryText);
-        }
-
-        sb.AppendLine();
-        sb.AppendLine($"Text ID: {id}");
-        sb.AppendLine("Source: " + source);
-        sb.AppendLine("Current target: " + target);
-
-        sb.AppendLine($"Return ONLY the final target text in the format [ID:{id}]{{target}} and nothing else.");
-
-        return sb.ToString();
-    }
-
     [BlueprintActionDefinition(BlueprintAction.EditText)]
     [Action("Edit text", Description = "Review translated text and generate an edited version.")]
     public async Task<TextEditResponse> EditText(
