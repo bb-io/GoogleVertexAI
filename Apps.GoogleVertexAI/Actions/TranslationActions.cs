@@ -241,29 +241,6 @@ public class TranslationActions(InvocationContext invocationContext, IFileManage
         };
     }
 
-    private static string BuildPerUnitPrompt(string id, string source, string? userInstruction, string? glossaryText)
-    {
-        var sb = new StringBuilder();
-        if (!string.IsNullOrWhiteSpace(userInstruction))
-            sb.AppendLine(userInstruction.Trim());
-        else
-            sb.AppendLine("Translate the text.");
-
-        sb.AppendLine();
-        if (!string.IsNullOrWhiteSpace(glossaryText))
-        {
-            sb.AppendLine("Use the following glossary where applicable to ensure terminology consistency:");
-            sb.AppendLine(glossaryText);
-            sb.AppendLine();
-        }
-
-        sb.AppendLine($"Text ID: {id}");
-        sb.Append("Source: ").AppendLine(source);
-        sb.AppendLine("Return ONLY the processed target text, prefixed with {ID:" + id + "} and nothing else.");
-
-        return sb.ToString();
-    }
-
     [BlueprintActionDefinition(BlueprintAction.TranslateText)]
     [Action("Translate text", Description = "Localize the text provided.")]
     public async Task<TextTranslationResponse> LocalizeText(

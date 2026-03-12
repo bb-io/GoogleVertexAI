@@ -12,7 +12,7 @@ public class PromptRequest
                                           "Lower temperatures are good for prompts that require a more " +
                                           "deterministic and less open-ended or creative response, while " +
                                           "higher temperatures can lead to more diverse or creative results.")]
-    [StaticDataSource(typeof(TemperatureDataSourceHandler))]
+    [DataSource(typeof(TemperatureDataSourceHandler))]
     public float? Temperature { get; set; }
 
     [Display("Max output tokens", Description = "Maximum number of tokens that can be generated in the response. " +

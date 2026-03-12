@@ -1,12 +1,11 @@
 ﻿using System.Globalization;
 using Blackbird.Applications.Sdk.Common.Dynamic;
-using Blackbird.Applications.Sdk.Common.Dictionaries;
 
 namespace Apps.GoogleVertexAI.DataSourceHandlers.FloatParameterHandlers;
 
-public class TemperatureDataSourceHandler : IStaticDataSourceItemHandler
+public class TemperatureDataSourceHandler : IDataSourceItemHandler
 {
-    public IEnumerable<DataSourceItem> GetData()
+    public IEnumerable<DataSourceItem> GetData(DataSourceContext context)
     {
         return
         [
