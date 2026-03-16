@@ -40,15 +40,17 @@ public class EditActions(InvocationContext invocationContext, IFileManagementCli
 
         async Task<IEnumerable<string?>> BatchEdit(IEnumerable<Segment> batch)
         {
-            var json = JsonConvert.SerializeObject(batch.Select((x, i) => "{ID:" + i + "}" + x.GetSource()));
+            var batchList = batch.ToList();
+
+            var json = JsonConvert.SerializeObject(batchList.Select((x, i) => "{ID:" + i + "}" + x.GetSource()));
 
             string? glossaryPrompt = null;
             if (glossary?.Glossary != null)
             {
                 var glossaryPromptPart =
                     await GlossaryHelper.GetGlossaryPromptPart(fileManagementClient, glossary.Glossary,
-                        string.Join(';', batch.Select(x => x.Source)) + ";" +
-                        string.Join(';', batch.Select(x => x.Target)));
+                        string.Join(';', batchList.Select(x => x.Source)) + ";" +
+                        string.Join(';', batchList.Select(x => x.Target)));
                 if (glossaryPromptPart != null)
                 {
                     glossaryPrompt +=
@@ -70,18 +72,31 @@ public class EditActions(InvocationContext invocationContext, IFileManagementCli
                 "Include only the target texts (updated or not) in the format [ID:X]{target}. " +
                 $"Example: [ID:1]{{target1}},[ID:2]{{target2}}. " +
                 $"{prompt ?? ""} {glossaryPrompt ?? ""} Sentences: \n" +
-                string.Join("\n", batch.Select((x, i) => $"ID: {i}; Source: {x.GetSource()}; Target: {x.GetTarget()}"));
+                string.Join("\n", batchList.Select((x, i) => $"ID: {i}; Source: {x.GetSource()}; Target: {x.GetTarget()}"));
 
             var (response, promptUsage) = await ExecuteGeminiPrompt(promptRequest, model, userPrompt, systemPrompt);
 
-            var results = new List<string?>();
-            var matches = Regex.Matches(response, @"\[ID:(.+?)\]\{([\s\S]+?)\}(?=,\[|$|,?\n)").Cast<Match>().ToList();
+            var translationLookup = new Dictionary<int, string>();
+            var matches = Regex.Matches(response, @"\[ID:(.+?)\]\{([\s\S]+?)\}(?=,\[|$|,?\n)").Cast<Match>();
+
             foreach (var match in matches)
             {
                 if (match.Groups[2].Value.Contains("[ID:"))
                     continue;
-                results.Add(match.Groups[2].Value);
+
+                if (int.TryParse(match.Groups[1].Value, out int id))
+                    translationLookup[id] = match.Groups[2].Value;
             }
+
+            var results = new List<string?>();
+            for (int i = 0; i < batchList.Count; i++)
+            {
+                if (translationLookup.TryGetValue(i, out var translation))
+                    results.Add(translation);
+                else
+                    results.Add(batchList[i].GetTarget());
+            }
+
             counter++;
             return results;
         }
