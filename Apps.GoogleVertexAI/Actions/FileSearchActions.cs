@@ -39,22 +39,26 @@ public class FileSearchActions(InvocationContext invocationContext, IFileManagem
     public async Task<FileSearchUploadResponse> UploadFileToStore([ActionParameter] UploadFileToStoreRequest input)
     {
         await using var stream = await fileManagementClient.DownloadAsync(input.File);
+        var memoryStream = new MemoryStream();
+        await stream.CopyToAsync(memoryStream);
+        memoryStream.Position = 0;
+        
         var displayName = input.DisplayName ?? input.File.Name;
 
         if (IsGeminiApiKeyConnection())
         {
-            return await UploadFileToStoreWithApiKey(input, stream, displayName);
+            return await UploadFileToStoreWithApiKey(input, memoryStream, displayName);
         }
 
         EnsureVertexAiConnection();
-        stream.Position = 0;
+        memoryStream.Position = 0;
 
         var effectiveRegion = ResolveVertexRegion();
         var bucketName = await EnsureRegionalBucketAsync(Storage!, ProjectId, effectiveRegion);
         var objectName = $"file-search/{DateTime.UtcNow:yyyyMMdd}/{Guid.NewGuid():N}/{Path.GetFileName(input.File.Name)}";
         var contentType = input.File.ContentType ?? "application/octet-stream";
 
-        await Storage!.UploadObjectAsync(bucketName, objectName, contentType, stream);
+        await Storage!.UploadObjectAsync(bucketName, objectName, contentType, memoryStream);
 
         var registerRequest = GeminiApiClient.CreateRequest("v1beta/files:register", Method.Post);
         registerRequest.AddJsonBody(new GeminiRegisterFilesRequest
