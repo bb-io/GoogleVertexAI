@@ -25,6 +25,13 @@ public class UsageDto
     {
     }
 
+    public UsageDto(int promptTokens, int candidatesTokens, int totalTokens)
+    {
+        PromptTokens = promptTokens;
+        CandidatesTokens = candidatesTokens;
+        TotalTokens = totalTokens;
+    }
+
     public UsageDto(GenerateContentResponse.Types.UsageMetadata usageMetadata)
     {
         PromptTokens = usageMetadata.PromptTokenCount;

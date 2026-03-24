@@ -20,24 +20,25 @@ namespace GoogleVertexAI.Base
         .AddJsonFile("appsettings.json")
         .Build();
 
-            var serviceAccountPath = config.GetSection("ConnectionDefinition:ServiceAccountConfString").Value;
+            var connectionValues = config.GetSection("ConnectionDefinition").GetChildren()
+                .ToDictionary(x => x.Key, x => x.Value ?? string.Empty);
 
-            if (File.Exists(serviceAccountPath))
+            if (!connectionValues.ContainsKey(CredNames.ConnectionType))
             {
-                var serviceAccountJson = File.ReadAllText(serviceAccountPath);
+                connectionValues[CredNames.ConnectionType] = !string.IsNullOrWhiteSpace(connectionValues.GetValueOrDefault(CredNames.ApiKey))
+                    ? Apps.GoogleVertexAI.Constants.ConnectionTypes.GeminiApiKey
+                    : Apps.GoogleVertexAI.Constants.ConnectionTypes.ServiceAccount;
+            }
 
-                Creds = new List<AuthenticationCredentialsProvider>
-        {
-            new(AuthenticationCredentialsRequestLocation.None, CredNames.ServiceAccountConfString, serviceAccountJson),
-            new(AuthenticationCredentialsRequestLocation.None, CredNames.Region, config.GetSection("ConnectionDefinition:Region").Value)
-        };
-            }
-            else
+            var serviceAccountPath = connectionValues.GetValueOrDefault(CredNames.ServiceAccountConfString);
+            if (!string.IsNullOrWhiteSpace(serviceAccountPath) && File.Exists(serviceAccountPath))
             {
-                Creds = config.GetSection("ConnectionDefinition").GetChildren()
-                    .Select(x => new AuthenticationCredentialsProvider(x.Key, x.Value))
-                    .ToList();
+                connectionValues[CredNames.ServiceAccountConfString] = File.ReadAllText(serviceAccountPath);
             }
+
+            Creds = connectionValues
+                .Select(x => new AuthenticationCredentialsProvider(x.Key, x.Value))
+                .ToList();
 
             var relativePath = config.GetSection("TestFolder").Value;
             var projectDirectory = Directory.GetParent(AppDomain.CurrentDomain.BaseDirectory).Parent.Parent.Parent.FullName;

@@ -15,7 +15,8 @@ Before you can connect you need to make sure that:
 - You have selected or created a [Cloud Platform project](https://console.cloud.google.com/project).
 - You have [enabled billing](https://cloud.google.com/billing/docs/how-to/modify-project) for your project.
 - You have [enabled the Vertex AI API](https://console.cloud.google.com/flows/enableapi?apiid=aiplatform.googleapis.com).
-- You have created a service account and generated JSON keys.
+- If you want to use Gemini File Search, you have also [enabled the Generative Language API](https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview).
+- You have either created a service account and generated JSON keys, or created a Gemini API key.
 
 ### Creating service account and generating JSON keys
 
@@ -30,24 +31,47 @@ Before you can connect you need to make sure that:
 8. Click _Add key_ => _Create new key_. Choose the _JSON_ key type and click _Create_.
 9. Open the downloaded JSON file and copy its contents, which will be used in the _Service account configuration string_ connection parameter.
 
+### Creating a Gemini API key
+
+1. Navigate to the selected or created [Cloud Platform project](https://console.cloud.google.com/project).
+2. Open _APIs & Services_ -> _Credentials_.
+3. Click _Create credentials_ -> _API key_.
+4. Copy the created key and use it in the _API key_ connection parameter.
+5. Optionally restrict the key to the _Generative Language API_.
+
 ## Connecting
 
 1. Navigate to apps and search for Google Gemini AI. If you cannot find Google Gemini AI then click _Add App_ in the top right corner, select Google Gemini AI and add the app to your Blackbird environment.
 2. Click _Add Connection_.
 3. Name your connection for future reference e.g. 'My organization'.
-4. Fill in the JSON configuration string obtained in the previous step.
-5. Choose the necessary region.
-6. Click _Connect_.
-7. Confirm that the connection has appeared and the status is _Connected_.
+4. Choose one of the supported connection types:
+   - _Service account_: provide the _Service account configuration string_ and choose a region.
+   - _Gemini API key_: provide the _API key_.
+5. Click _Connect_.
+6. Confirm that the connection has appeared and the status is _Connected_.
 
 ![Connecting](image/README/connecting.png)
+
+## Authentication modes
+
+- **Service account**: use this mode for Vertex AI based actions, background jobs, file attachments in prompt generation, and the existing regional Vertex flows.
+- **Gemini API key**: use this mode for Gemini Developer API access, including Gemini File Search retrieval.
+
+> **Important**: searching across File Search stores is supported only when the connection uses **Gemini API key** authentication. This applies to both the _Generate text_ action when _File search store names_ are provided and the _Search documents_ action.
 
 ## Actions
 
 ### Generation
 
-- **Generate text** generates text using Gemini model. Optionally, you can specify an image or video to perform generation with the gemini-1.0-pro-vision model. Both image and video have a size limit of 20 MB. If an image is already present, video cannot be specified and vice versa. Supported image formats are PNG and JPEG, while video formats include MOV, MPEG, MP4, MPG, AVI, WMV, MPEGPS, and FLV. Optionally, set _Is Blackbird prompt_ to _True_ to indicate that the prompt given to the action is the result of one of AI Utilities app's actions. You can also specify safety categories in the _Safety categories_ input parameter and respective thresholds for them in the _Thresholds for safety categories_ input parameter. If one list has more items than the other, extra ones are ignored.
+- **Generate text** generates text using Gemini model. Optionally, you can specify file search store names and a metadata filter to ground the response with Gemini File Search. File Search grounding is available only with a _Gemini API key_ connection. Optionally, set _Is Blackbird prompt_ to _True_ to indicate that the prompt given to the action is the result of one of AI Utilities app's actions. You can also specify safety categories in the _Safety categories_ input parameter and respective thresholds for them in the _Thresholds for safety categories_ input parameter. If one list has more items than the other, extra ones are ignored.
 - **Generate text from files** generates text using Gemini model with one or more additional file attached to the conversation.
+
+### File search
+
+- **Create file search store** creates a Gemini File Search store.
+- **Upload file to store** uploads a Blackbird file directly to a File Search store, optionally with metadata and custom chunking.
+- **Search documents** queries one or more File Search stores and returns a grounded answer with retrieved contexts. This action is available only with a _Gemini API key_ connection.
+- **Delete file search store** deletes a File Search store.
 
 ### Translation
 
