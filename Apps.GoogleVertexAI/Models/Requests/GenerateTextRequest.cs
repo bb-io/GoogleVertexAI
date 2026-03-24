@@ -18,8 +18,7 @@ public class GenerateTextRequest : PromptRequest
     [StaticDataSource(typeof(AIModelDataSourceHandler))]
     public required string AIModel { get; set; }
 
-    [Display("File search store names", Description = "Optional. When provided, Gemini File Search will be used to ground the response against the specified stores.")]
-    [DataSource(typeof(FileSearchStoreDataSourceHandler))]
+    [Display("File search store names", Description = "Optional. When provided, Gemini File Search will be used to ground the response against the specified stores."), DataSource(typeof(FileSearchStoreDataSourceHandler))]
     public IEnumerable<string>? FileSearchStoreNames { get; set; }
 
     [Display("Metadata filter", Description = "Optional AIP-160 filter expression used to restrict File Search results, for example: author = \"Robert Graves\".")]

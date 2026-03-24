@@ -7,15 +7,15 @@ using RestSharp;
 
 namespace Apps.GoogleVertexAI.DataSourceHandlers;
 
-public class FileSearchStoreDataSourceHandler(InvocationContext invocationContext) : IDataSourceItemHandler
+public class FileSearchStoreDataSourceHandler(InvocationContext invocationContext) : IAsyncDataSourceItemHandler
 {
-    public IEnumerable<DataSourceItem> GetData(DataSourceContext context)
+    public async Task<IEnumerable<DataSourceItem>> GetDataAsync(DataSourceContext context, CancellationToken cancellationToken)
     {
         var client = GeminiApiClientFactory.Create(
             invocationContext.AuthenticationCredentialsProviders,
             invocationContext.Logger);
 
-        var stores = GetStores(client);
+        var stores = await GetStoresAsync(client);
 
         return stores
             .Where(x => MatchesSearch(x, context.SearchString))
@@ -38,7 +38,7 @@ public class FileSearchStoreDataSourceHandler(InvocationContext invocationContex
                    && store.DisplayName.Contains(searchString, StringComparison.OrdinalIgnoreCase));
     }
 
-    private static List<GeminiFileSearchStoreResource> GetStores(IGeminiApiClient client)
+    private static async Task<List<GeminiFileSearchStoreResource>> GetStoresAsync(IGeminiApiClient client)
     {
         var stores = new List<GeminiFileSearchStoreResource>();
         string? pageToken = null;
@@ -52,8 +52,7 @@ public class FileSearchStoreDataSourceHandler(InvocationContext invocationContex
             }
 
             var request = client.CreateRequest(resource, Method.Get);
-            var response = client.ExecuteAsync<GeminiFileSearchStoreListResponse>(request).GetAwaiter().GetResult();
-
+            var response = await client.ExecuteAsync<GeminiFileSearchStoreListResponse>(request);
             if (response.FileSearchStores is not null)
             {
                 stores.AddRange(response.FileSearchStores
