@@ -91,7 +91,7 @@ public class VertexAiInvocable : BaseInvocable
     {
         if (!IsGeminiApiKeyConnection())
         {
-            throw new PluginApplicationException($"{capability} requires a Gemini API key connection.");
+            throw new PluginMisconfigurationException($"{capability} requires a Gemini API key connection.");
         }
     }
 
@@ -99,7 +99,7 @@ public class VertexAiInvocable : BaseInvocable
     {
         if (ConnectionType != ConnectionTypes.ServiceAccount)
         {
-            throw new PluginApplicationException("This action requires a service account connection.");
+            throw new PluginMisconfigurationException("This action requires a service account connection.");
         }
     }
 

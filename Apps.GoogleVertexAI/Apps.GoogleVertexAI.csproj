@@ -16,11 +16,11 @@
         <PackageReference Include="Blackbird.Applications.Sdk.Glossaries.Utils" Version="1.0.1" />
         <PackageReference Include="Blackbird.Filters" Version="1.1.21" />
         <PackageReference Include="Blackbird.Xliff.Utils" Version="1.1.14" />
-        <PackageReference Include="Google.Apis.Auth" Version="1.70.0" />
 		<PackageReference Include="Google.Cloud.AIPlatform.V1" Version="3.50.0" />
         <PackageReference Include="Google.Cloud.Storage.V1" Version="4.13.0" />
         <PackageReference Include="morelinq" Version="4.4.0" />
         <PackageReference Include="RestSharp" Version="112.1.0" />
+        <PackageReference Include="RestSharp.Serializers.NewtonsoftJson" Version="112.1.0" />
     </ItemGroup>
 
     <ItemGroup>

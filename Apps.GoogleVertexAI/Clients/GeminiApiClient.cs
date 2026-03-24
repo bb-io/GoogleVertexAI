@@ -1,10 +1,9 @@
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using Apps.GoogleVertexAI.Clients.Abstractions;
 using Apps.GoogleVertexAI.Models.Dto;
 using Blackbird.Applications.Sdk.Common.Exceptions;
+using Newtonsoft.Json;
 using RestSharp;
-using RestSharp.Serializers.Json;
+using RestSharp.Serializers.NewtonsoftJson;
 
 namespace Apps.GoogleVertexAI.Clients;
 
@@ -12,10 +11,10 @@ public abstract class GeminiApiClient : RestClient, IGeminiApiClient
 {
     private const string BaseUrl = "https://generativelanguage.googleapis.com/";
 
-    protected static readonly JsonSerializerOptions JsonOptions = new()
+    protected static readonly JsonSerializerSettings JsonOptions = new()
     {
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        NullValueHandling = NullValueHandling.Ignore,
+        ContractResolver = new Newtonsoft.Json.Serialization.CamelCasePropertyNamesContractResolver()
     };
 
     private readonly Blackbird.Applications.Sdk.Common.Invocation.Logger? _logger;
@@ -23,7 +22,7 @@ public abstract class GeminiApiClient : RestClient, IGeminiApiClient
     protected GeminiApiClient(
         Blackbird.Applications.Sdk.Common.Invocation.Logger? logger) : base(
             new RestClientOptions(BaseUrl),
-            configureSerialization: s => s.UseSystemTextJson(JsonOptions))
+            configureSerialization: s => s.UseNewtonsoftJson(JsonOptions))
     {
         _logger = logger;
     }
@@ -38,7 +37,7 @@ public abstract class GeminiApiClient : RestClient, IGeminiApiClient
     {
         var response = await ExecuteAsync(request, cancellationToken);
 
-        var result = System.Text.Json.JsonSerializer.Deserialize<T>(response.Content ?? string.Empty, JsonOptions);
+        var result = JsonConvert.DeserializeObject<T>(response.Content ?? string.Empty, JsonOptions);
         if (result is null)
         {
             throw new PluginApplicationException("Gemini API returned an empty response.");
@@ -81,7 +80,7 @@ public abstract class GeminiApiClient : RestClient, IGeminiApiClient
 
         try
         {
-            var envelope = System.Text.Json.JsonSerializer.Deserialize<GeminiGoogleErrorEnvelope>(content, JsonOptions);
+            var envelope = JsonConvert.DeserializeObject<GeminiGoogleErrorEnvelope>(content, JsonOptions);
             return envelope?.Error?.Message ?? content;
         }
         catch
