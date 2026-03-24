@@ -1,7 +1,14 @@
 {
     "ConnectionDefinition": {
+      "ConnectionType": "ServiceAccount",
       "ServiceAccountConfString": "",
       "Region": ""
     },
+    /*
+    "ConnectionDefinition": {
+      "ConnectionType": "GeminiApiKey",
+      "ApiKey": "your-gemini-api-key"
+    },
+    */
     "TestFolder": ""
 }

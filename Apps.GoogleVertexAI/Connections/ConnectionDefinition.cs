@@ -10,7 +10,8 @@ public class ConnectionDefinition : IConnectionDefinition
     [
         new()
         {
-            Name = "Service account",
+            DisplayName = "Service account",
+            Name = ConnectionTypes.ServiceAccount,
             AuthenticationType = ConnectionAuthenticationType.Undefined,
             ConnectionProperties =
             [
@@ -65,13 +66,40 @@ public class ConnectionDefinition : IConnectionDefinition
                     ]
                 }
             ]
+        },
+        new()
+        {
+            DisplayName = "Gemini API key",
+            Name = ConnectionTypes.GeminiApiKey,
+            AuthenticationType = ConnectionAuthenticationType.Undefined,
+            ConnectionProperties =
+            [
+                new(CredNames.ApiKey)
+                {
+                    DisplayName = "API key",
+                    Sensitive = true
+                }
+            ]
         }
     ];
 
     public IEnumerable<AuthenticationCredentialsProvider> CreateAuthorizationCredentialsProviders(
         Dictionary<string, string> values)
     {
-        yield return new AuthenticationCredentialsProvider(CredNames.ServiceAccountConfString, values[CredNames.ServiceAccountConfString]);
-        yield return new AuthenticationCredentialsProvider( CredNames.Region, values[CredNames.Region]);
+        var providers = values
+            .Where(x => x.Key != nameof(ConnectionPropertyGroup))
+            .Select(x => new AuthenticationCredentialsProvider(x.Key, x.Value))
+            .ToList();
+
+        var connectionType = values.TryGetValue(nameof(ConnectionPropertyGroup), out var selectedConnectionType) &&
+                             ConnectionTypes.SupportedConnectionTypes.Contains(selectedConnectionType)
+            ? selectedConnectionType
+            : values.ContainsKey(CredNames.ApiKey)
+                ? ConnectionTypes.GeminiApiKey
+                : ConnectionTypes.ServiceAccount;
+
+        providers.Add(new AuthenticationCredentialsProvider(CredNames.ConnectionType, connectionType));
+
+        return providers;
     }
 }
