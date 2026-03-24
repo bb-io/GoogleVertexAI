@@ -1,5 +1,6 @@
 using Apps.GoogleVertexAI.Clients.Abstractions;
 using Apps.GoogleVertexAI.Factories;
+using Apps.GoogleVertexAI.Invocables;
 using Apps.GoogleVertexAI.Models.Dto;
 using Blackbird.Applications.Sdk.Common.Dynamic;
 using Blackbird.Applications.Sdk.Common.Invocation;
@@ -7,13 +8,14 @@ using RestSharp;
 
 namespace Apps.GoogleVertexAI.DataSourceHandlers;
 
-public class FileSearchStoreDataSourceHandler(InvocationContext invocationContext) : IAsyncDataSourceItemHandler
+public class FileSearchStoreDataSourceHandler(InvocationContext invocationContext)
+    : VertexAiInvocable(invocationContext), IAsyncDataSourceItemHandler
 {
     public async Task<IEnumerable<DataSourceItem>> GetDataAsync(DataSourceContext context, CancellationToken cancellationToken)
     {
         var client = GeminiApiClientFactory.Create(
-            invocationContext.AuthenticationCredentialsProviders,
-            invocationContext.Logger);
+            InvocationContext.AuthenticationCredentialsProviders,
+            InvocationContext.Logger);
 
         var stores = await GetStoresAsync(client);
 
