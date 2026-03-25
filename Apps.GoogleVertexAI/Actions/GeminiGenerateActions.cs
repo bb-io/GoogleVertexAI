@@ -19,7 +19,7 @@ namespace Apps.GoogleVertexAI.Actions;
 public class GeminiGenerateActions(InvocationContext invocationContext, IFileManagementClient fileManagementClient)
     : VertexAiInvocable(invocationContext)
 {
-    [Action("Generate text", Description = "Generate text using Gemini. Text generation based on a single prompt is executed with the chosen model.")]
+    [Action("Chat", Description = "Ask a question or give a command to Gemini. The input will be used as a prompt for the model. Also specify store names to search for relevant files to include in the response generation. Generation will be performed with the chosen model.")]
     public async Task<GeneratedTextResponse> GenerateText(
         [ActionParameter] GenerateTextRequest input,
         [ActionParameter] PromptRequest promptRequest)
@@ -60,7 +60,7 @@ public class GeminiGenerateActions(InvocationContext invocationContext, IFileMan
         };
     }
 
-    [Action("Generate text from files", Description = "Generate text using Gemini. The input can take additional files. Generation will be performed with the chosen model.")]
+    [Action("Chat with files", Description = "Chat with Gemini using additional files as context. Generation will be performed with the chosen model.")]
     public async Task<GeneratedTextResponse> GenerateTextFromFile(
         [ActionParameter] GenerateTextFromFileRequest input,
         [ActionParameter] PromptRequest promptRequest)

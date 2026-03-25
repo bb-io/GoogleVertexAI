@@ -16,7 +16,7 @@ Before you can connect you need to make sure that:
 - You have [enabled billing](https://cloud.google.com/billing/docs/how-to/modify-project) for your project.
 - You have [enabled the Vertex AI API](https://console.cloud.google.com/flows/enableapi?apiid=aiplatform.googleapis.com).
 - If you want to use Gemini File Search, you have also [enabled the Generative Language API](https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview).
-- You have either created a service account and generated JSON keys, or created a Gemini API key.
+- You have either created a service account and generated JSON keys, or created a Gemini API key, but keep in mind that Gemini File Search is only supported with the Gemini API key authentication.
 
 ### Creating service account and generating JSON keys
 
@@ -63,8 +63,8 @@ Before you can connect you need to make sure that:
 
 ### Generation
 
-- **Generate text** generates text using Gemini model. Optionally, you can specify file search store names and a metadata filter to ground the response with Gemini File Search. File Search grounding is available only with a _Gemini API key_ connection. Optionally, set _Is Blackbird prompt_ to _True_ to indicate that the prompt given to the action is the result of one of AI Utilities app's actions. You can also specify safety categories in the _Safety categories_ input parameter and respective thresholds for them in the _Thresholds for safety categories_ input parameter. If one list has more items than the other, extra ones are ignored.
-- **Generate text from files** generates text using Gemini model with one or more additional file attached to the conversation.
+- **Chat** Ask a question or give a command to Gemini. The input will be used as a prompt for the model. Also specify store names to search for relevant files to include in the response generation. Generation will be performed with the chosen model.
+- **Chat with files**  similar to the previous action, but with more control over how retrieved file content is included in the prompt. You can specify a custom prompt template and use variables to include retrieved content and the original question in the prompt.
 
 ### File search
 
@@ -72,6 +72,8 @@ Before you can connect you need to make sure that:
 - **Upload file to store** uploads a Blackbird file directly to a File Search store, optionally with metadata and custom chunking.
 - **Search documents** queries one or more File Search stores and returns a grounded answer with retrieved contexts. This action is available only with a _Gemini API key_ connection.
 - **Delete file search store** deletes a File Search store.
+
+> This group of actions do not communicate with LLM, it's only about storing and retrieving files. The retrieved files can then be used in the prompt for the generation actions.
 
 ### Translation
 
