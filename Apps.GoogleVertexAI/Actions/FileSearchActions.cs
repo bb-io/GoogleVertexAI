@@ -20,8 +20,33 @@ public class FileSearchActions(InvocationContext invocationContext, IFileManagem
     private const int OperationPollingDelayMs = 5000;
     private const int MaxOperationPollAttempts = 24;
 
-    [Action("Create file search store", Description = "Create a Gemini File Search store.")]
-    public async Task<FileSearchStoreResponse> CreateFileSearchStore([ActionParameter] CreateFileSearchStoreRequest input)
+    [Action("Search documents",
+        Description =
+            "Search indexed documents in one or more Gemini File Search stores and return a grounded answer. This action requires a Gemini API key connection.")]
+    public async Task<GeneratedTextResponse> SearchDocuments(
+        [ActionParameter] SearchDocumentsRequest input,
+        [ActionParameter] PromptRequest promptRequest)
+    {
+        EnsureGeminiApiKeyConnection("Searching across File Search stores");
+
+        var fileSearchResponse = await ExecuteFileSearchGenerateAsync(
+            input.AIModel,
+            input.Query,
+            promptRequest,
+            input.FileSearchStoreNames,
+            input.MetadataFilter);
+
+        return new GeneratedTextResponse
+        {
+            GeneratedText = ExtractText(fileSearchResponse),
+            Usage = ExtractUsage(fileSearchResponse),
+            RetrievedContexts = ExtractRetrievedContexts(fileSearchResponse)
+        };
+    }
+
+    [Action("Create file store", Description = "Create a Gemini file search store.")]
+    public async Task<FileSearchStoreResponse> CreateFileSearchStore(
+        [ActionParameter] CreateFileSearchStoreRequest input)
     {
         var request = GeminiApiClient.CreateRequest("v1beta/fileSearchStores", Method.Post);
         request.AddJsonBody(new { displayName = input.DisplayName });
@@ -35,14 +60,16 @@ public class FileSearchActions(InvocationContext invocationContext, IFileManagem
         };
     }
 
-    [Action("Upload file to store", Description = "Upload a Blackbird file directly into a Gemini File Search store and wait until indexing completes.")]
+    [Action("Upload file to store",
+        Description =
+            "Upload a Blackbird file directly into a Gemini File Search store and wait until indexing completes.")]
     public async Task<FileSearchUploadResponse> UploadFileToStore([ActionParameter] UploadFileToStoreRequest input)
     {
         await using var stream = await fileManagementClient.DownloadAsync(input.File);
         var memoryStream = new MemoryStream();
         await stream.CopyToAsync(memoryStream);
         memoryStream.Position = 0;
-        
+
         var displayName = input.DisplayName ?? input.File.Name;
 
         if (IsGeminiApiKeyConnection())
@@ -55,7 +82,8 @@ public class FileSearchActions(InvocationContext invocationContext, IFileManagem
 
         var effectiveRegion = ResolveVertexRegion();
         var bucketName = await EnsureRegionalBucketAsync(Storage!, ProjectId, effectiveRegion);
-        var objectName = $"file-search/{DateTime.UtcNow:yyyyMMdd}/{Guid.NewGuid():N}/{Path.GetFileName(input.File.Name)}";
+        var objectName =
+            $"file-search/{DateTime.UtcNow:yyyyMMdd}/{Guid.NewGuid():N}/{Path.GetFileName(input.File.Name)}";
         var contentType = input.File.ContentType ?? "application/octet-stream";
 
         await Storage!.UploadObjectAsync(bucketName, objectName, contentType, memoryStream);
@@ -90,12 +118,26 @@ public class FileSearchActions(InvocationContext invocationContext, IFileManagem
         }
 
         await WaitForOperationAsync(importResponse.Name);
-
         return new FileSearchUploadResponse
         {
             StoreName = input.StoreName,
             OperationName = importResponse.Name,
             DisplayName = displayName
+        };
+    }
+
+    [Action("Delete file search store", Description = "Delete a Gemini File Search store.")]
+    public async Task<FileSearchStoreResponse> DeleteFileSearchStore(
+        [ActionParameter] DeleteFileSearchStoreRequest input)
+    {
+        var request = GeminiApiClient.CreateRequest(
+            $"v1beta/{input.StoreName}?force={(input.Force ?? true).ToString().ToLowerInvariant()}",
+            Method.Delete);
+
+        await GeminiApiClient.ExecuteAsync(request);
+        return new FileSearchStoreResponse
+        {
+            StoreName = input.StoreName
         };
     }
 
@@ -115,8 +157,10 @@ public class FileSearchActions(InvocationContext invocationContext, IFileManagem
 
         startRequest.AddHeader("X-Goog-Upload-Protocol", "resumable");
         startRequest.AddHeader("X-Goog-Upload-Command", "start");
-        startRequest.AddHeader("X-Goog-Upload-Header-Content-Length", fileBytes.Length.ToString(CultureInfo.InvariantCulture));
-        startRequest.AddHeader("X-Goog-Upload-Header-Content-Type", input.File.ContentType ?? "application/octet-stream");
+        startRequest.AddHeader("X-Goog-Upload-Header-Content-Length",
+            fileBytes.Length.ToString(CultureInfo.InvariantCulture));
+        startRequest.AddHeader("X-Goog-Upload-Header-Content-Type",
+            input.File.ContentType ?? "application/octet-stream");
         startRequest.AddJsonBody(new GeminiUploadToFileSearchStoreRequest
         {
             DisplayName = displayName,
@@ -139,7 +183,8 @@ public class FileSearchActions(InvocationContext invocationContext, IFileManagem
         uploadRequest.AddHeader("X-Goog-Upload-Command", "upload, finalize");
         uploadRequest.AddHeader("X-Goog-Upload-Offset", "0");
         uploadRequest.AddHeader("Content-Length", fileBytes.Length.ToString(CultureInfo.InvariantCulture));
-        uploadRequest.AddParameter(input.File.ContentType ?? "application/octet-stream", fileBytes, ParameterType.RequestBody);
+        uploadRequest.AddParameter(input.File.ContentType ?? "application/octet-stream", fileBytes,
+            ParameterType.RequestBody);
 
         var uploadResponse = await GeminiApiClient.ExecuteAsync<GeminiFileSearchOperation>(uploadRequest);
         if (string.IsNullOrWhiteSpace(uploadResponse.Name))
@@ -154,43 +199,6 @@ public class FileSearchActions(InvocationContext invocationContext, IFileManagem
             StoreName = input.StoreName,
             OperationName = uploadResponse.Name,
             DisplayName = displayName
-        };
-    }
-
-    [Action("Delete file search store", Description = "Delete a Gemini File Search store.")]
-    public async Task<FileSearchStoreResponse> DeleteFileSearchStore([ActionParameter] DeleteFileSearchStoreRequest input)
-    {
-        var request = GeminiApiClient.CreateRequest(
-            $"v1beta/{input.StoreName}?force={(input.Force ?? true).ToString().ToLowerInvariant()}",
-            Method.Delete);
-
-        await GeminiApiClient.ExecuteAsync(request);
-
-        return new FileSearchStoreResponse
-        {
-            StoreName = input.StoreName
-        };
-    }
-
-    [Action("Search documents", Description = "Search indexed documents in one or more Gemini File Search stores and return a grounded answer. This action requires a Gemini API key connection.")]
-    public async Task<GeneratedTextResponse> SearchDocuments(
-        [ActionParameter] SearchDocumentsRequest input,
-        [ActionParameter] PromptRequest promptRequest)
-    {
-        EnsureGeminiApiKeyConnection("Searching across File Search stores");
-
-        var fileSearchResponse = await ExecuteFileSearchGenerateAsync(
-            input.AIModel,
-            input.Query,
-            promptRequest,
-            input.FileSearchStoreNames,
-            input.MetadataFilter);
-
-        return new GeneratedTextResponse
-        {
-            GeneratedText = ExtractText(fileSearchResponse),
-            Usage = ExtractUsage(fileSearchResponse),
-            RetrievedContexts = ExtractRetrievedContexts(fileSearchResponse)
         };
     }
 
@@ -239,7 +247,8 @@ public class FileSearchActions(InvocationContext invocationContext, IFileManagem
             {
                 if (operation.Error is not null)
                 {
-                    throw new PluginApplicationException(operation.Error.Message ?? "Gemini File Search operation failed.");
+                    throw new PluginApplicationException(operation.Error.Message ??
+                                                         "Gemini File Search operation failed.");
                 }
 
                 return;
