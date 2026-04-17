@@ -1,4 +1,5 @@
-﻿using Apps.GoogleVertexAI.DataSourceHandlers.Static;
+﻿using Apps.GoogleVertexAI.DataSourceHandlers;
+using Apps.GoogleVertexAI.DataSourceHandlers.Static;
 using Blackbird.Applications.Sdk.Common;
 using Blackbird.Applications.Sdk.Common.Dictionaries;
 using Blackbird.Applications.Sdk.Common.Dynamic;
@@ -17,7 +18,7 @@ public class TranslateTextRequest : ITranslateTextInput
     [StaticDataSource(typeof(LocaleDataSourceHandler))]
     public string TargetLanguage { get; set; }
 
-    [StaticDataSource(typeof(AIModelDataSourceHandler))]
+    [DataSource(typeof(AIModelDynamicDataSourceHandler))]
     [Display("Model")]
     public required string AIModel { get; set; }
 

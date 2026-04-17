@@ -15,7 +15,7 @@ public class GenerateTextRequest : PromptRequest
     public bool? IsBlackbirdPrompt { get; set; }
 
     [Display("Model")]
-    [StaticDataSource(typeof(AIModelDataSourceHandler))]
+    [DataSource(typeof(AIModelDynamicDataSourceHandler))]
     public required string AIModel { get; set; }
 
     [Display("File search store names", Description = "Optional. When provided, Gemini File Search will be used to ground the response against the specified stores."), DataSource(typeof(FileSearchStoreDataSourceHandler))]
