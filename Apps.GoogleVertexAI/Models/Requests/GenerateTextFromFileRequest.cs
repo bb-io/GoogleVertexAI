@@ -1,6 +1,8 @@
-﻿using Apps.GoogleVertexAI.DataSourceHandlers.Static;
+﻿using Apps.GoogleVertexAI.DataSourceHandlers;
+using Apps.GoogleVertexAI.DataSourceHandlers.Static;
 using Blackbird.Applications.Sdk.Common;
 using Blackbird.Applications.Sdk.Common.Dictionaries;
+using Blackbird.Applications.Sdk.Common.Dynamic;
 using Blackbird.Applications.Sdk.Common.Files;
 
 namespace Apps.GoogleVertexAI.Models.Requests;
@@ -15,7 +17,7 @@ public class GenerateTextFromFileRequest : PromptRequest
     public IEnumerable<FileReference> Files { get; set; } = [];
 
     [Display("Model")]
-    [StaticDataSource(typeof(AIModelDataSourceHandler))]
+    [DataSource(typeof(AIModelDynamicDataSourceHandler))]
     public required string AIModel { get; set; }
 
     [Display("Is Blackbird prompt", Description = "Parameter indicating whether the input prompt is the output " +

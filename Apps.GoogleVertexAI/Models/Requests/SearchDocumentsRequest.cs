@@ -12,7 +12,7 @@ public class SearchDocumentsRequest : PromptRequest
     public string Query { get; set; } = string.Empty;
 
     [Display("Model")]
-    [StaticDataSource(typeof(AIModelDataSourceHandler))]
+    [DataSource(typeof(AIModelDynamicDataSourceHandler))]
     public required string AIModel { get; set; }
 
     [Display("File search store names", Description = "One or more file search store resource names, for example: fileSearchStores/my-store.")]
