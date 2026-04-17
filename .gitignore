@@ -369,3 +369,5 @@ FodyWeavers.xsd
 /Tests.GoogleVertexAI/appsettings.json
 /Tests.GoogleVertexAI/service_account.json
 /Tests.GoogleVertexAI/TestFiles/Output
+/Tests.GoogleVertexAI/appsettings.json
+/Tests.GoogleVertexAI/service_account.json

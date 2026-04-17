@@ -4,15 +4,23 @@ public static class ModelTokenService
 {
     public static int GetMaxTokensForModel(string? modelName)
     {
-        return modelName switch
+        if (string.IsNullOrWhiteSpace(modelName))
         {
-            "gemini-3-pro-preview" => 65535,
-            "gemini-2.5-pro" => 65535,
-            "gemini-2.5-flash" => 65535,
-            "gemini-2.5-flash-lite" => 65535,
-            "gemini-2.0-flash" => 8191,
-            "gemini-2.0-flash-lite" => 8191,
-            _ => 4096
-        };
+            return 4096;
+        }
+
+        if (modelName.StartsWith("gemini-3.", StringComparison.OrdinalIgnoreCase)
+            || modelName.StartsWith("gemini-3-", StringComparison.OrdinalIgnoreCase)
+            || modelName.StartsWith("gemini-2.5-", StringComparison.OrdinalIgnoreCase))
+        {
+            return 65535;
+        }
+
+        if (modelName.StartsWith("gemini-2.0-flash", StringComparison.OrdinalIgnoreCase))
+        {
+            return 8191;
+        }
+
+        return 4096;
     }
 }
