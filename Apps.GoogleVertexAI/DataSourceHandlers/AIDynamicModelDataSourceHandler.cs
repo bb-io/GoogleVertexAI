@@ -13,6 +13,8 @@ public class AIModelDynamicDataSourceHandler(InvocationContext invocationContext
 {
     public async Task<IEnumerable<DataSourceItem>> GetDataAsync(DataSourceContext context, CancellationToken cancellationToken)
     {
+        var shouldHideLatestAndRobotics = ConnectionType == ConnectionTypes.GeminiApiKey;
+
         var models = ConnectionType switch
         {
             ConnectionTypes.GeminiApiKey => await GetGeminiApiModelsAsync(GeminiApiClient, cancellationToken),
@@ -21,7 +23,7 @@ public class AIModelDynamicDataSourceHandler(InvocationContext invocationContext
         };
 
         return models
-            .Where(x => IsSupportedTextModel(x.ModelId))
+            .Where(x => IsSupportedTextModel(x.ModelId, shouldHideLatestAndRobotics))
             .Where(x => MatchesSearch(x, context.SearchString))
             .DistinctBy(x => x.ModelId)
             .OrderByDescending(x => x.ModelId, StringComparer.OrdinalIgnoreCase)
@@ -139,13 +141,24 @@ public class AIModelDynamicDataSourceHandler(InvocationContext invocationContext
                || item.DisplayName.Contains(searchString, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool IsSupportedTextModel(string modelId)
+    internal static bool IsSupportedTextModel(string modelId, bool hideLatestAndRobotics = false)
     {
-        return modelId.StartsWith("gemini-", StringComparison.OrdinalIgnoreCase)
-               && !modelId.Contains("embedding", StringComparison.OrdinalIgnoreCase)
-               && !modelId.Contains("image", StringComparison.OrdinalIgnoreCase)
-               && !modelId.Contains("live", StringComparison.OrdinalIgnoreCase)
-               && !modelId.Contains("tts", StringComparison.OrdinalIgnoreCase);
+        if (!modelId.StartsWith("gemini-", StringComparison.OrdinalIgnoreCase)
+            || modelId.Contains("embedding", StringComparison.OrdinalIgnoreCase)
+            || modelId.Contains("image", StringComparison.OrdinalIgnoreCase)
+            || modelId.Contains("live", StringComparison.OrdinalIgnoreCase)
+            || modelId.Contains("tts", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (!hideLatestAndRobotics)
+        {
+            return true;
+        }
+
+        return !modelId.Contains("latest", StringComparison.OrdinalIgnoreCase)
+               && !modelId.Contains("robotics", StringComparison.OrdinalIgnoreCase);
     }
 
     private string GetVertexApiBaseUrl()

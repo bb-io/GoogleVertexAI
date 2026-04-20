@@ -6,9 +6,13 @@
         <Nullable>enable</Nullable>
         <Product>Google Gemini AI</Product>
         <Description>Powerful and unified machine learning platform offered by Google Cloud</Description>
-        <Version>1.3.30</Version>
+        <Version>1.3.31</Version>
         <AssemblyName>Apps.GoogleVertexAI</AssemblyName>
     </PropertyGroup>
+
+    <ItemGroup>
+        <InternalsVisibleTo Include="Tests.GoogleVertexAI" />
+    </ItemGroup>
 
     <ItemGroup>
         <PackageReference Include="Blackbird.Applications.SDK.Blueprints" Version="1.0.0-rc.10308" />
