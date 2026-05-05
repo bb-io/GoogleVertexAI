@@ -98,7 +98,7 @@ public class TranslationActions(InvocationContext invocationContext, IFileManage
                         "Try to reduce the batch size.");
                 }
 
-                return result.Results;
+                return result.Results.Select(GeminiResponseParser.SanitizeTranslationText);
             }
             catch (PluginApplicationException ex)
             {
@@ -132,7 +132,7 @@ public class TranslationActions(InvocationContext invocationContext, IFileManage
             if (translation is not null)
             {
                 updatedCount++;
-                segment.SetTarget(translation);
+                segment.SetTarget(GeminiResponseParser.SanitizeTranslationText(translation));
                 segment.State = SegmentState.Translated;
             }        
         }

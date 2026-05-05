@@ -127,7 +127,7 @@ public class BatchActions(InvocationContext invocationContext, IFileManagementCl
                         var arrayResponse = GeminiResponseParser.ParseStringArray(text, InvocationContext.Logger);
                         foreach (var item in arrayResponse.Results)
                         {
-                            translations.Add(globalIndex.ToString(), item);
+                            translations.Add(globalIndex.ToString(), GeminiResponseParser.SanitizeTranslationText(item));
                             globalIndex += 1;
                         }
                     }
@@ -141,7 +141,7 @@ public class BatchActions(InvocationContext invocationContext, IFileManagementCl
                             if (match.Success && !string.IsNullOrEmpty(match.Groups[1].Value))
                             {
                                 var id = match.Groups[1].Value.Trim();
-                                var content = match.Groups[2].Value.Trim();
+                                var content = GeminiResponseParser.SanitizeTranslationText(match.Groups[2].Value.Trim());
 
                                 if (!translations.ContainsKey(id))
                                 {
@@ -159,7 +159,7 @@ public class BatchActions(InvocationContext invocationContext, IFileManagementCl
                         if (match.Success && !string.IsNullOrEmpty(match.Groups[1].Value))
                         {
                             var id = match.Groups[1].Value.Trim();
-                            var content = match.Groups[2].Value.Trim();
+                            var content = GeminiResponseParser.SanitizeTranslationText(match.Groups[2].Value.Trim());
 
                             if (!translations.ContainsKey(id))
                             {
@@ -181,22 +181,23 @@ public class BatchActions(InvocationContext invocationContext, IFileManagementCl
             {                
                 if (backgroundType == "translate")
                 {
-                    pair.segment.SetTarget(tgt);
+                    pair.segment.SetTarget(GeminiResponseParser.SanitizeTranslationText(tgt));
                     pair.segment.State = SegmentState.Translated;
                     updatedCount++;
                 }
                 else if (backgroundType == "edit")
                 {
-                    if (pair.segment.GetTarget() != tgt)
+                    var sanitizedTarget = GeminiResponseParser.SanitizeTranslationText(tgt);
+                    if (pair.segment.GetTarget() != sanitizedTarget)
                     {
-                        pair.segment.SetTarget(tgt);
+                        pair.segment.SetTarget(sanitizedTarget);
                         updatedCount++;
                     }
                     pair.segment.State = SegmentState.Reviewed;
                 }
                 else
                 {
-                    pair.segment.SetTarget(tgt);
+                    pair.segment.SetTarget(GeminiResponseParser.SanitizeTranslationText(tgt));
                     updatedCount++;
                 }
             }                
