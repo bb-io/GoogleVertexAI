@@ -98,7 +98,9 @@ public class TranslationActions(InvocationContext invocationContext, IFileManage
                         "Try to reduce the batch size.");
                 }
 
-                return result.Results;
+                // Strip the {ID:N} prefix Gemini was asked to preserve, so it doesn't
+                // land in segment.SetTarget(...). Mirrors BatchActions/EditActions.
+                return result.Results.Select(s => s is null ? null : Regex.Replace(s, @"^\{ID:\d+\}", ""));
             }
             catch (PluginApplicationException ex)
             {
