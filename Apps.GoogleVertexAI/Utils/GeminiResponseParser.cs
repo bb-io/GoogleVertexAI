@@ -9,6 +9,8 @@ namespace Apps.GoogleVertexAI.Utils;
 
 public static class GeminiResponseParser
 {
+    private static readonly Regex LeadingIdPattern = new(@"^\s*\{ID:[^}]+\}\s*", RegexOptions.Compiled);
+
     public static ParseResultsEntity ParseStringArray(string response, Logger? logger = null)
     {
         try
@@ -91,6 +93,16 @@ public static class GeminiResponseParser
         }
 
         return result.ToArray();
+    }
+
+    public static string SanitizeTranslationText(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return text;
+        }
+
+        return LeadingIdPattern.Replace(text, string.Empty);
     }
     
     public static List<XliffIssueDto> ParseIssuesJson(string response, Logger? logger = null)
