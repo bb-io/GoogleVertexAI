@@ -16,8 +16,8 @@ public static class GeminiResponseParser
         try
         {
             string cleanedText = response.Trim()
-                .Replace("```", string.Empty)
-                .Replace("json", string.Empty);
+                .Replace("```json", string.Empty)
+                .Replace("```", string.Empty);
 
             int startIndex = cleanedText.IndexOf("[");
             if (startIndex < 0)
