@@ -67,8 +67,7 @@ public class BatchActions(InvocationContext invocationContext, IFileManagementCl
         var transformation = await Transformation.Parse(stream, originalXliff.OriginalXliff.Name);
         var backgroundType = transformation.MetaData.FirstOrDefault(x => x.Type == "background-type")?.Value;
         
-        var units = transformation.GetUnits();
-        var segments = transformation.GetSegments();
+        var units = transformation.GetUnits().ToList();
         var originalSegments = backgroundType switch
         {
             "translate" => units.SelectMany(x => x.Segments).GetSegmentsForTranslation().ToList(),
@@ -172,7 +171,7 @@ public class BatchActions(InvocationContext invocationContext, IFileManagementCl
             }
         }
         
-        var totalSegmentsCount = segments.Count();
+        var totalSegmentsCount = units.SelectMany(x => x.Segments).Count();
         
         var updatedCount = 0;
         foreach (var pair in originalSegments.Select((segment, index) => new { segment, index }))

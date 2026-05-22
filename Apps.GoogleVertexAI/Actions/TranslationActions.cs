@@ -58,9 +58,9 @@ public class TranslationActions(InvocationContext invocationContext, IFileManage
         var counter = 1;        
         var errorMessages = new List<string>();
 
-        async Task<IEnumerable<string?>> BatchTranslate(IEnumerable<Segment> batch)
+        async Task<IEnumerable<string?>> BatchTranslate(IEnumerable<(Unit Unit, Segment Segment)> batch)
         {
-            var json = JsonConvert.SerializeObject(batch.Select((x, i) => "{ID:" + i + "}" + x.GetSource()));
+            var json = JsonConvert.SerializeObject(batch.Select((x, i) => "{ID:" + i + "}" + x.Segment.GetSource()));
 
             var userPrompt = 
                 $"Please process ALL texts in the provided array. It is critical that you translate EVERY item individually, not just the first one. " +
@@ -118,23 +118,34 @@ public class TranslationActions(InvocationContext invocationContext, IFileManage
             }
         }
 
-        var segments = content.GetSegments();
-        result.TotalSegmentsCount = segments.Count();
-        segments = segments.Where(x => !x.IsIgnorbale && x.IsInitial);
-        result.TotalTranslatable = segments.Count();
-
-        var processedBatches = await segments.Batch(batchSize).Process(BatchTranslate);
+        var units = content.GetUnits().ToList();
+        result.TotalSegmentsCount = units.SelectMany(x => x.Segments).Count();
+        
+        units = units.Where(x => x.IsInitial).ToList();
+        result.TotalTranslatable = units.SelectMany(x => x.Segments).Count();
+        var processedBatches = await units.Batch(batchSize).Process(BatchTranslate);
         result.ProcessedBatchesCount = counter - 1;
 
         var updatedCount = 0;
-        foreach (var (segment, translation) in processedBatches)
+        foreach (var (unit, translations) in processedBatches)
         {
-            if (translation is not null)
+            foreach (var (segment, translation) in translations)
             {
-                updatedCount++;
-                segment.SetTarget(GeminiResponseParser.SanitizeTranslationText(translation));
-                segment.State = SegmentState.Translated;
-            }        
+                var shouldTranslateFromState = segment.State == null || segment.State == SegmentState.Initial;
+                if (!shouldTranslateFromState || string.IsNullOrEmpty(translation))
+                {
+                    continue;
+                }
+
+                if (segment.GetTarget() != translation)
+                {
+                    updatedCount++;
+                    segment.SetTarget(translation);
+                    segment.State = SegmentState.Translated;
+                }
+            }
+            
+            unit.Provenance.Translation.Tool = model;
         }
 
         result.TargetsUpdatedCount = updatedCount;
@@ -171,26 +182,20 @@ public class TranslationActions(InvocationContext invocationContext, IFileManage
             content.SourceLanguage = await IdentifySourceLanguage(promptRequest, model, content.Source().GetPlaintext());
         }
 
-        var segments = content.GetSegments();
-        segments = segments.Where(x => !x.IsIgnorbale && x.IsInitial).ToList();
+        var segmentList = content.GetUnits().SelectMany(x => x.Segments).GetSegmentsForTranslation().ToList();
 
         var glossaryStructure = await GlossaryHelper.ParseGlossary(fileManagementClient, glossary?.Glossary);
 
         var jsonlMs = new MemoryStream();
         using (var sw = new StreamWriter(jsonlMs, new UTF8Encoding(false), 1024, leaveOpen: true))
         {
-            // Get bucket size from bucketRequest
             var bucketSize = bucketRequest.GetBucketSizeOrDefault();
-            
-            // Group segments into buckets
-            var segmentList = segments.ToList();
-            var bucketCount = 0;
-            
+
             for (int i = 0; i < segmentList.Count; i += bucketSize)
             {
                 var bucketSegments = segmentList.Skip(i).Take(bucketSize).ToList();
                 var userPrompt = new StringBuilder();
-                
+
                 userPrompt.AppendLine($"Translate the following texts from {content.SourceLanguage} to {content.TargetLanguage}. " +
                                    "Please process ALL texts in the provided array. It is critical that you translate EVERY item individually, not just the first one. " +
                                    "Return the outputs as a serialized JSON array of strings without additional formatting, " +
@@ -198,21 +203,21 @@ public class TranslationActions(InvocationContext invocationContext, IFileManage
                                    "This is crucial because your response will be deserialized programmatically. " +
                                    $"Do not skip any entries or provide partial results. {prompt}");
                 userPrompt.AppendLine();
-                
+
                 userPrompt.AppendLine("Original texts:");
-                
+
                 for (int j = 0; j < bucketSegments.Count; j++)
                 {
                     var globalIndex = i + j;
                     var sourceText = bucketSegments[j].GetSource();
                     userPrompt.AppendLine($"{{ID:{globalIndex}}}{sourceText}");
                 }
-                
+
                 if (glossaryStructure != null)
                 {
                     var combinedText = string.Join(" ", bucketSegments.Select(s => s.GetSource()));
                     var glossaryPromptPart = GlossaryHelper.GetGlossaryPromptPart(glossaryStructure, combinedText);
-                    
+
                     if (!string.IsNullOrWhiteSpace(glossaryPromptPart))
                     {
                         userPrompt.AppendLine();
@@ -223,11 +228,10 @@ public class TranslationActions(InvocationContext invocationContext, IFileManage
                         userPrompt.AppendLine(glossaryPromptPart);
                     }
                 }
-                
+
                 var req = BatchHelper.BuildBatchRequestObject(userPrompt.ToString(), SystemPrompt, promptRequest, input.AIModel);
                 var line = JsonConvert.SerializeObject(req, Formatting.None);
                 await sw.WriteLineAsync(line);
-                bucketCount++;
             }
         }
 

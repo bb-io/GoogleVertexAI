@@ -1,5 +1,6 @@
 ﻿using Apps.GoogleVertexAI.Helpers;
 using Apps.GoogleVertexAI.Invocables;
+using Apps.GoogleVertexAI.Utils;
 using Apps.GoogleVertexAI.Models.Requests;
 using Apps.GoogleVertexAI.Models.Response;
 using Blackbird.Applications.Sdk.Common;
@@ -38,19 +39,19 @@ public class EditActions(InvocationContext invocationContext, IFileManagementCli
         var counter = 1;        
         var errorMessages = new List<string>();
 
-        async Task<IEnumerable<string?>> BatchEdit(IEnumerable<Segment> batch)
+        async Task<IEnumerable<string?>> BatchEdit(IEnumerable<(Unit Unit, Segment Segment)> batch)
         {
             var batchList = batch.ToList();
 
-            var json = JsonConvert.SerializeObject(batchList.Select((x, i) => "{ID:" + i + "}" + x.GetSource()));
+            var json = JsonConvert.SerializeObject(batchList.Select((x, i) => "{ID:" + i + "}" + x.Segment.GetSource()));
 
             string? glossaryPrompt = null;
             if (glossary?.Glossary != null)
             {
                 var glossaryPromptPart =
                     await GlossaryHelper.GetGlossaryPromptPart(fileManagementClient, glossary.Glossary,
-                        string.Join(';', batchList.Select(x => x.Source)) + ";" +
-                        string.Join(';', batchList.Select(x => x.Target)));
+                        string.Join(';', batchList.Select(x => x.Segment.Source)) + ";" +
+                        string.Join(';', batchList.Select(x => x.Segment.Target)));
                 if (glossaryPromptPart != null)
                 {
                     glossaryPrompt +=
@@ -72,7 +73,7 @@ public class EditActions(InvocationContext invocationContext, IFileManagementCli
                 "Include only the target texts (updated or not) in the format [ID:X]{target}. " +
                 $"Example: [ID:1]{{target1}},[ID:2]{{target2}}. " +
                 $"{prompt ?? ""} {glossaryPrompt ?? ""} Sentences: \n" +
-                string.Join("\n", batchList.Select((x, i) => $"ID: {i}; Source: {x.GetSource()}; Target: {x.GetTarget()}"));
+                string.Join("\n", batchList.Select((x, i) => $"ID: {i}; Source: {x.Segment.GetSource()}; Target: {x.Segment.GetTarget()}"));
 
             var (response, promptUsage) = await ExecuteGeminiPrompt(promptRequest, model, userPrompt, systemPrompt);
 
@@ -94,33 +95,40 @@ public class EditActions(InvocationContext invocationContext, IFileManagementCli
                 if (translationLookup.TryGetValue(i, out var translation))
                     results.Add(translation);
                 else
-                    results.Add(batchList[i].GetTarget());
+                    results.Add(batchList[i].Segment.GetTarget());
             }
 
             counter++;
             return results;
         }
 
-        var segments = content.GetSegments();
-        result.TotalSegmentsCount = segments.Count();
-        segments = segments.Where(x => !x.IsIgnorbale && x.State == SegmentState.Translated);
-        result.TotalSegmentsReviewed = segments.Count();
+        var allUnits = content.GetUnits().ToList();
+        result.TotalSegmentsCount = allUnits.SelectMany(x => x.Segments).Count();
+        var editableUnits = allUnits
+            .Where(u => u.Segments.Any(s => !s.IsIgnorbale && s.State == SegmentState.Translated))
+            .ToList();
+        result.TotalSegmentsReviewed = editableUnits
+            .SelectMany(u => u.Segments)
+            .Count(s => !s.IsIgnorbale && s.State == SegmentState.Translated);
 
-        var processedBatches = await segments.Batch(batchSize).Process(BatchEdit);
+        var processedBatches = await editableUnits.Batch(batchSize).Process(BatchEdit);
         result.ProcessedBatchesCount = counter - 1;
 
         var updatedCount = 0;
-        foreach (var (segment, translation) in processedBatches)
+        foreach (var (unit, translations) in processedBatches)
         {
-            if (translation is not null)
+            foreach (var (segment, translation) in translations)
             {
-                if (segment.GetTarget() != translation)
+                if (translation is not null && segment.State == SegmentState.Translated)
                 {
-                    updatedCount++;
-                    segment.SetTarget(translation);
+                    if (segment.GetTarget() != translation)
+                    {
+                        updatedCount++;
+                        segment.SetTarget(translation);
+                    }
+                    segment.State = SegmentState.Reviewed;
                 }
-                segment.State = SegmentState.Reviewed;
-            }        
+            }
         }
 
         result.TotalSegmentsUpdated = updatedCount;
@@ -150,8 +158,7 @@ public class EditActions(InvocationContext invocationContext, IFileManagementCli
         var stream = await fileManagementClient.DownloadAsync(input.File);
         var content = await Transformation.Parse(stream, input.File.Name);
 
-        var segments = content.GetSegments();
-        segments = segments.Where(x => !x.IsIgnorbale && x.IsInitial);
+        var segmentList = content.GetUnits().SelectMany(x => x.Segments).GetSegmentsForEditing().ToList();
 
         var glossaryStructure = await GlossaryHelper.ParseGlossary(fileManagementClient, glossary?.Glossary);
 
@@ -160,28 +167,23 @@ public class EditActions(InvocationContext invocationContext, IFileManagementCli
         var jsonlMs = new MemoryStream();
         using (var sw = new StreamWriter(jsonlMs, new UTF8Encoding(false), 1024, leaveOpen: true))
         {
-            // Get bucket size from bucketRequest
             var bucketSize = bucketRequest.GetBucketSizeOrDefault();
-            
-            // Group segments into buckets
-            var segmentList = segments.ToList();
-            var bucketCount = 0;
-            
+
             for (int i = 0; i < segmentList.Count; i += bucketSize)
             {
                 var bucketSegments = segmentList.Skip(i).Take(bucketSize).ToList();
                 var userPrompt = new StringBuilder();
-                
+
                 userPrompt.AppendLine($"Your input consists of sentences in {content.SourceLanguage} language with their translations into {content.TargetLanguage}. " +
                     "Review and edit the translated target text as necessary to ensure it is a correct and accurate translation of the source text. " +
                     "If you see XML tags in the source also include them in the target text, don't delete or modify them. " +
                     "Include only the target texts (updated or not) in the format [ID:X]{target}. " +
                     $"Example: [ID:1]{{target1}},[ID:2]{{target2}}. {prompt}");
                 userPrompt.AppendLine();
-                
+
                 userPrompt.AppendLine("Please process ALL texts in the provided list. It is critical that you edit EVERY item individually.");
                 userPrompt.AppendLine("Sentences:");
-                
+
                 for (int j = 0; j < bucketSegments.Count; j++)
                 {
                     var globalIndex = i + j;
@@ -189,14 +191,13 @@ public class EditActions(InvocationContext invocationContext, IFileManagementCli
                     var targetText = bucketSegments[j].GetTarget();
                     userPrompt.AppendLine($"ID: {globalIndex}; Source: {sourceText}; Target: {targetText}");
                 }
-                
-                // Add glossary if available
+
                 if (glossaryStructure != null)
                 {
                     var combinedText = string.Join(" ", bucketSegments.Select(s => s.GetSource())) + " " +
                                        string.Join(" ", bucketSegments.Select(s => s.GetTarget()));
                     var glossaryPromptPart = GlossaryHelper.GetGlossaryPromptPart(glossaryStructure, combinedText);
-                    
+
                     if (!string.IsNullOrWhiteSpace(glossaryPromptPart))
                     {
                         userPrompt.AppendLine();
@@ -207,11 +208,10 @@ public class EditActions(InvocationContext invocationContext, IFileManagementCli
                         userPrompt.AppendLine(glossaryPromptPart);
                     }
                 }
-                
+
                 var req = BatchHelper.BuildBatchRequestObject(userPrompt.ToString(), systemPrompt, promptRequest, input.AIModel);
                 var line = JsonConvert.SerializeObject(req, Formatting.None);
                 await sw.WriteLineAsync(line);
-                bucketCount++;
             }
         }
 
