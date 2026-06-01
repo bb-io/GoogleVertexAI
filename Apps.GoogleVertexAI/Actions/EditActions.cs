@@ -14,15 +14,19 @@ using Blackbird.Filters.Extensions;
 using Blackbird.Filters.Transformations;
 using Newtonsoft.Json;
 using System.Text;
-using System.Text.RegularExpressions;
+using Apps.GoogleVertexAI.Constants;
+using Apps.GoogleVertexAI.Models.Dto;
+using Blackbird.Applications.Sdk.Common.Exceptions;
 
 namespace Apps.GoogleVertexAI.Actions;
 
 [ActionList("Editing")]
-public class EditActions(InvocationContext invocationContext, IFileManagementClient fileManagementClient) : VertexAiInvocable(invocationContext)
+public class EditActions(InvocationContext invocationContext, IFileManagementClient fileManagementClient) 
+    : VertexAiInvocable(invocationContext)
 {
     [BlueprintActionDefinition(BlueprintAction.EditFile)]
-    [Action("Edit", Description = "Edit a translation. This action assumes you have previously translated content in Blackbird through any translation action.")]
+    [Action("Edit", 
+        Description = "Edit a translation. This action assumes you have previously translated content in Blackbird through any translation action.")]
     public async Task<FileEditResponse> EditContent(
         [ActionParameter] EditFileRequest input,
         [ActionParameter] PromptRequest promptRequest,
@@ -43,63 +47,83 @@ public class EditActions(InvocationContext invocationContext, IFileManagementCli
         {
             var batchList = batch.ToList();
 
-            var json = JsonConvert.SerializeObject(batchList.Select((x, i) => "{ID:" + i + "}" + x.Segment.GetSource()));
-
-            string? glossaryPrompt = null;
+            var inputObjects = batchList.Select((x, i) => new 
+            { 
+                id = i, 
+                source = x.Segment.GetSource(),
+                target = x.Segment.GetTarget()
+            });
+            var segmentsJson = JsonConvert.SerializeObject(inputObjects);
+            
+            string systemPrompt = 
+                "You are a linguistic expert that should process the following texts according to the given instructions.";
+        
+            var userPrompt = new StringBuilder();
+            userPrompt.AppendLine(
+                $"Your input consists of sentences in {content.SourceLanguage} with their current translations into {content.TargetLanguage}. " +
+                "Review and edit the translated target text as necessary to ensure it is a correct and accurate translation of the source text. " +
+                "If you see XML tags in the source, you MUST include them in the target text. Do not delete or modify them. " +
+                "Return ONLY a JSON array of objects containing the edited translations in the exact same order. " +
+                $"Do not skip any entries. {prompt}");
+            userPrompt.AppendLine();
+            userPrompt.AppendLine($"Original texts: {segmentsJson}");
+            
             if (glossary?.Glossary != null)
             {
-                var glossaryPromptPart =
-                    await GlossaryHelper.GetGlossaryPromptPart(fileManagementClient, glossary.Glossary,
-                        string.Join(';', batchList.Select(x => x.Segment.Source)) + ";" +
-                        string.Join(';', batchList.Select(x => x.Segment.Target)));
-                if (glossaryPromptPart != null)
+                var glossaryPromptPart = await GlossaryHelper.GetGlossaryPromptPart(
+                    fileManagementClient, 
+                    glossary.Glossary, 
+                    segmentsJson);
+            
+                if (!string.IsNullOrWhiteSpace(glossaryPromptPart))
                 {
-                    glossaryPrompt +=
+                    userPrompt.AppendLine();
+                    userPrompt.AppendLine(
                         "Enhance the target text by incorporating relevant terms from our glossary where applicable. " +
                         "Ensure that the translation aligns with the glossary entries for the respective languages. " +
                         "If a term has variations or synonyms, consider them and choose the most appropriate " +
-                        "translation to maintain consistency and precision. ";
-                    glossaryPrompt += glossaryPromptPart;
+                        "translation to maintain consistency and precision.");
+                    userPrompt.AppendLine(glossaryPromptPart);
                 }
             }
+            
+            var (response, promptUsage) = await ExecuteGeminiPrompt(
+                promptRequest, 
+                model, 
+                userPrompt.ToString(), 
+                systemPrompt,
+                ResponseSchemas.IdTranslationArray);
 
-            var systemPrompt =
-                "You are a linguistic expert that should process the following texts according to the given instructions";
-
-            var userPrompt =
-                $"Your input consists of sentences in {content.SourceLanguage} language with their translations into {content.TargetLanguage}. " +
-                "Review and edit the translated target text as necessary to ensure it is a correct and accurate translation of the source text. " +
-                "If you see XML tags in the source also include them in the target text, don't delete or modify them. " +
-                "Include only the target texts (updated or not) in the format [ID:X]{target}. " +
-                $"Example: [ID:1]{{target1}},[ID:2]{{target2}}. " +
-                $"{prompt ?? ""} {glossaryPrompt ?? ""} Sentences: \n" +
-                string.Join("\n", batchList.Select((x, i) => $"ID: {i}; Source: {x.Segment.GetSource()}; Target: {x.Segment.GetTarget()}"));
-
-            var (response, promptUsage) = await ExecuteGeminiPrompt(promptRequest, model, userPrompt, systemPrompt);
-
-            var translationLookup = new Dictionary<int, string>();
-            var matches = Regex.Matches(response, @"\[ID:(.+?)\]\{([\s\S]+?)\}(?=,\[|$|,?\n)").Cast<Match>();
-
-            foreach (var match in matches)
+            try
             {
-                if (match.Groups[2].Value.Contains("[ID:"))
-                    continue;
+                var parsedResults = JsonConvert.DeserializeObject<TranslationResultDto[]>(response) ?? 
+                                    throw new PluginApplicationException(
+                                        "The Gemini API returned an empty or null JSON array.");
 
-                if (int.TryParse(match.Groups[1].Value, out int id))
-                    translationLookup[id] = match.Groups[2].Value;
+                if (parsedResults.Length != batchList.Count)
+                {
+                    errorMessages.Add(
+                        $"The response from the Gemini API (batch number: {counter}) was incomplete. " +
+                        $"Got {parsedResults.Length} results, but expected {batchList.Count}. " +
+                        "Try to reduce the batch size.");
+                }
+
+                return parsedResults.OrderBy(x => x.Id).Select(x => x.Translation);
             }
-
-            var results = new List<string?>();
-            for (int i = 0; i < batchList.Count; i++)
+            catch (Exception ex)
             {
-                if (translationLookup.TryGetValue(i, out var translation))
-                    results.Add(translation);
-                else
-                    results.Add(batchList[i].Segment.GetTarget());
+                InvocationContext.Logger?.LogError(
+                    $"[GoogleGemini] Failed to parse response: {ex.Message}; Response: {response}", []);
+                throw new PluginApplicationException(
+                    $"Failed to parse the response from Gemini API. " +
+                    $"The response format might be invalid or incomplete. " +
+                    $"Error: {ex.Message}", 
+                    ex);
             }
-
-            counter++;
-            return results;
+            finally
+            {
+                counter++;
+            }
         }
 
         var allUnits = content.GetUnits().ToList();
@@ -136,17 +160,25 @@ public class EditActions(InvocationContext invocationContext, IFileManagementCli
         if (input.OutputFileHandling == "original")
         {
             var targetContent = content.Target();
-            result.File = await fileManagementClient.UploadAsync(targetContent.Serialize().ToStream(), targetContent.OriginalMediaType, targetContent.OriginalName);
-        } else
+            result.File = await fileManagementClient.UploadAsync(
+                targetContent.Serialize().ToStream(), 
+                targetContent.OriginalMediaType, 
+                targetContent.OriginalName);
+        } 
+        else
         {
-            result.File = await fileManagementClient.UploadAsync(content.Serialize().ToStream(), MediaTypes.Xliff, content.XliffFileName);
-        }        
+            result.File = await fileManagementClient.UploadAsync(
+                content.Serialize().ToStream(), 
+                MediaTypes.Xliff, 
+                content.XliffFileName);
+        }
 
+        result.ErrorMessages = errorMessages;
         return result;
-
     }
 
-    [Action("Edit in background", Description = "Edit file content retrieved from a CMS or file storage. Use in conjunction with a checkpoint to get the result of this long running background job.")]
+    [Action("Edit in background", 
+        Description = "Edit file content retrieved from a CMS or file storage. Use in conjunction with a checkpoint to get the result of this long running background job.")]
     public async Task<StartBatchResponse> BatchEditContent(
         [ActionParameter] EditFileRequest input,
         [ActionParameter] PromptRequest promptRequest,
@@ -154,7 +186,6 @@ public class EditActions(InvocationContext invocationContext, IFileManagementCli
         [ActionParameter] GlossaryRequest glossary,
         [ActionParameter] BucketRequest bucketRequest)
     {
-        var model = input.AIModel;
         var stream = await fileManagementClient.DownloadAsync(input.File);
         var content = await Transformation.Parse(stream, input.File.Name);
 
@@ -165,51 +196,54 @@ public class EditActions(InvocationContext invocationContext, IFileManagementCli
         var systemPrompt = "You are a linguistic expert that should process the following texts according to the given instructions";
 
         var jsonlMs = new MemoryStream();
-        using (var sw = new StreamWriter(jsonlMs, new UTF8Encoding(false), 1024, leaveOpen: true))
+        await using (var sw = new StreamWriter(jsonlMs, new UTF8Encoding(false), 1024, leaveOpen: true))
         {
             var bucketSize = bucketRequest.GetBucketSizeOrDefault();
 
             for (int i = 0; i < segmentList.Count; i += bucketSize)
             {
                 var bucketSegments = segmentList.Skip(i).Take(bucketSize).ToList();
+                var inputObjects = bucketSegments.Select((s, index) => new 
+                { 
+                    id = i + index, 
+                    source = s.GetSource(),
+                    target = s.GetTarget()
+                });
+                var segmentsJson = JsonConvert.SerializeObject(inputObjects);
+                
                 var userPrompt = new StringBuilder();
-
-                userPrompt.AppendLine($"Your input consists of sentences in {content.SourceLanguage} language with their translations into {content.TargetLanguage}. " +
+                userPrompt.AppendLine(
+                    $"Your input consists of sentences in {content.SourceLanguage} with their current translations into {content.TargetLanguage}. " +
                     "Review and edit the translated target text as necessary to ensure it is a correct and accurate translation of the source text. " +
-                    "If you see XML tags in the source also include them in the target text, don't delete or modify them. " +
-                    "Include only the target texts (updated or not) in the format [ID:X]{target}. " +
-                    $"Example: [ID:1]{{target1}},[ID:2]{{target2}}. {prompt}");
+                    "If you see XML tags in the source, you MUST include them in the target text. Do not delete or modify them. " +
+                    "Return the edited translations in the specified JSON schema structure. " +
+                    $"Do not skip any entries. {prompt}");
                 userPrompt.AppendLine();
-
-                userPrompt.AppendLine("Please process ALL texts in the provided list. It is critical that you edit EVERY item individually.");
-                userPrompt.AppendLine("Sentences:");
-
-                for (int j = 0; j < bucketSegments.Count; j++)
-                {
-                    var globalIndex = i + j;
-                    var sourceText = bucketSegments[j].GetSource();
-                    var targetText = bucketSegments[j].GetTarget();
-                    userPrompt.AppendLine($"ID: {globalIndex}; Source: {sourceText}; Target: {targetText}");
-                }
+                userPrompt.AppendLine($"Original texts: {segmentsJson}");
 
                 if (glossaryStructure != null)
                 {
-                    var combinedText = string.Join(" ", bucketSegments.Select(s => s.GetSource())) + " " +
-                                       string.Join(" ", bucketSegments.Select(s => s.GetTarget()));
-                    var glossaryPromptPart = GlossaryHelper.GetGlossaryPromptPart(glossaryStructure, combinedText);
+                    var glossaryPromptPart = GlossaryHelper.GetGlossaryPromptPart(glossaryStructure, segmentsJson);
 
                     if (!string.IsNullOrWhiteSpace(glossaryPromptPart))
                     {
                         userPrompt.AppendLine();
-                        userPrompt.AppendLine("Enhance the target text by incorporating relevant terms from our glossary where applicable. " +
-                                            "Ensure that the translation aligns with the glossary entries for the respective languages. " +
-                                            "If a term has variations or synonyms, consider them and choose the most appropriate " +
-                                            "translation to maintain consistency and precision.");
+                        userPrompt.AppendLine(
+                            "Enhance the target text by incorporating relevant terms from our glossary where applicable. " +
+                            "Ensure that the translation aligns with the glossary entries for the respective languages. " +
+                            "If a term has variations or synonyms, consider them and choose the most appropriate " +
+                            "translation to maintain consistency and precision.");
                         userPrompt.AppendLine(glossaryPromptPart);
                     }
                 }
 
-                var req = BatchHelper.BuildBatchRequestObject(userPrompt.ToString(), systemPrompt, promptRequest, input.AIModel);
+                var req = BatchHelper.BuildBatchRequestObject(
+                    userPrompt.ToString(), 
+                    systemPrompt, 
+                    promptRequest, 
+                    input.AIModel, 
+                    ResponseSchemas.IdTranslationArray); 
+            
                 var line = JsonConvert.SerializeObject(req, Formatting.None);
                 await sw.WriteLineAsync(line);
             }
@@ -217,11 +251,16 @@ public class EditActions(InvocationContext invocationContext, IFileManagementCli
 
         var job = await CreateBatchRequest(jsonlMs, input.AIModel);
         content.MetaData.Add(new Metadata("background-type", "edit") { Category = [Meta.Categories.Blackbird] });
+        
+        var file = await fileManagementClient.UploadAsync(
+            content.Serialize().ToStream(),
+            MediaTypes.Xliff,
+            content.XliffFileName);
 
         return new StartBatchResponse
         {
             JobName = job.Name,
-            TransformationFile = await fileManagementClient.UploadAsync(content.Serialize().ToStream(), MediaTypes.Xliff, content.XliffFileName)
+            TransformationFile = file
         };
     }
         

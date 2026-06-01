@@ -3,6 +3,7 @@ using Blackbird.Applications.Sdk.Common.Files;
 using Blackbird.Applications.SDK.Blueprints.Interfaces.Edit;
 
 namespace Apps.GoogleVertexAI.Models.Response;
+
 public class FileEditResponse : IEditFileOutput
 {
     public FileReference File { get; set; }
@@ -18,4 +19,7 @@ public class FileEditResponse : IEditFileOutput
 
     [Display("Processed batches")]
     public int ProcessedBatchesCount { get; set; }
+
+    [Display("Error messages")]
+    public IEnumerable<string>? ErrorMessages { get; set; }
 }
