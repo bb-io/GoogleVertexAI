@@ -95,15 +95,11 @@ public class TranslationActions(InvocationContext invocationContext, IFileManage
                 SystemPrompt, 
                 rawSchema);
 
+            string[]? translations;
+
             try
             {
-                var translations = JsonConvert.DeserializeObject<string[]>(response);
-                if (translations is not null)
-                    return translations;
-                
-                InvocationContext.Logger?.LogError(
-                    $"[GoogleGemini] Empty translation received - failed to parse response. Raw: {response}", []);
-                throw new PluginApplicationException("The Gemini API returned an empty or null JSON array");
+                translations = JsonConvert.DeserializeObject<string[]>(response);
             }
             catch (Exception ex)
             {
@@ -119,6 +115,13 @@ public class TranslationActions(InvocationContext invocationContext, IFileManage
             {
                 counter++;
             }
+
+            if (translations is not null)
+                return translations;
+
+            InvocationContext.Logger?.LogError(
+                $"[GoogleGemini] Empty translation received - failed to parse response. Raw: {response}", []);
+            throw new PluginApplicationException("The Gemini API returned an empty or null JSON array.");
         }
 
         var units = content.GetUnits().ToList();
