@@ -58,7 +58,7 @@ public class TranslationActions(InvocationContext invocationContext, IFileManage
         var counter = 1;        
         var errorMessages = new List<string>();
 
-        async Task<IEnumerable<string?>> BatchTranslate(IEnumerable<(Unit Unit, Blackbird.Filters.Transformations.Segment Segment)> batch)
+        async Task<IEnumerable<string?>> BatchTranslate(IEnumerable<(Unit Unit, Segment Segment)> batch)
         {
             var inputObjects = batch.Select((x, index) => new 
             { 
@@ -184,43 +184,38 @@ public class TranslationActions(InvocationContext invocationContext, IFileManage
         var content = await Transformation.Parse(stream, input.File.Name);
         content.SourceLanguage ??= input.SourceLanguage;
         content.TargetLanguage ??= input.TargetLanguage;
-        if (content.TargetLanguage == null) throw new PluginMisconfigurationException("The target language is not defined yet. Please assign the target language in this action.");
+        if (content.TargetLanguage == null) 
+            throw new PluginMisconfigurationException(
+                "The target language is not defined yet. Please assign the target language in this action.");
 
-        if (content.SourceLanguage == null)
-        {
-            content.SourceLanguage = await IdentifySourceLanguage(promptRequest, model, content.Source().GetPlaintext());
-        }
+        content.SourceLanguage ??= await IdentifySourceLanguage(promptRequest, model, content.Source().GetPlaintext());
 
         var segmentList = content.GetUnits().SelectMany(x => x.Segments).GetSegmentsForTranslation().ToList();
 
         var glossaryStructure = await GlossaryHelper.ParseGlossary(fileManagementClient, glossary?.Glossary);
 
         var jsonlMs = new MemoryStream();
-        using (var sw = new StreamWriter(jsonlMs, new UTF8Encoding(false), 1024, leaveOpen: true))
+        await using (var sw = new StreamWriter(jsonlMs, new UTF8Encoding(false), 1024, leaveOpen: true))
         {
             var bucketSize = bucketRequest.GetBucketSizeOrDefault();
 
             for (int i = 0; i < segmentList.Count; i += bucketSize)
             {
                 var bucketSegments = segmentList.Skip(i).Take(bucketSize).ToList();
+                var inputObjects = bucketSegments.Select((s, index) => new 
+                { 
+                    id = i + index,
+                    text = s.GetSource() 
+                });
+                var segmentsJson = JsonConvert.SerializeObject(inputObjects);
+
                 var userPrompt = new StringBuilder();
-
-                userPrompt.AppendLine($"Translate the following texts from {content.SourceLanguage} to {content.TargetLanguage}. " +
-                                   "Please process ALL texts in the provided array. It is critical that you translate EVERY item individually, not just the first one. " +
-                                   "Return the outputs as a serialized JSON array of strings without additional formatting, " +
-                                   "maintaining the exact same number of elements as the input array. " +
-                                   "This is crucial because your response will be deserialized programmatically. " +
-                                   $"Do not skip any entries or provide partial results. {prompt}");
+                userPrompt.AppendLine(
+                    $"Translate the following texts from {content.SourceLanguage} to {content.TargetLanguage}. " +
+                    $"Return the translations in the specified JSON schema structure. " +
+                    $"Do not skip any entries or provide partial results. {prompt}");
                 userPrompt.AppendLine();
-
-                userPrompt.AppendLine("Original texts:");
-
-                for (int j = 0; j < bucketSegments.Count; j++)
-                {
-                    var globalIndex = i + j;
-                    var sourceText = bucketSegments[j].GetSource();
-                    userPrompt.AppendLine($"{{ID:{globalIndex}}}{sourceText}");
-                }
+                userPrompt.AppendLine($"Original texts: {segmentsJson}");
 
                 if (glossaryStructure != null)
                 {
@@ -238,14 +233,20 @@ public class TranslationActions(InvocationContext invocationContext, IFileManage
                     }
                 }
 
-                var req = BatchHelper.BuildBatchRequestObject(userPrompt.ToString(), SystemPrompt, promptRequest, input.AIModel);
+                var req = BatchHelper.BuildBatchRequestObject(
+                    userPrompt.ToString(), 
+                    SystemPrompt, 
+                    promptRequest, 
+                    input.AIModel, 
+                    ResponseSchemas.IdTranslationArray);
+                
                 var line = JsonConvert.SerializeObject(req, Formatting.None);
                 await sw.WriteLineAsync(line);
             }
         }
 
         var job = await CreateBatchRequest(jsonlMs, input.AIModel);
-        content.MetaData.Add(new Blackbird.Filters.Transformations.Metadata("background-type", "translate") { Category = [Meta.Categories.Blackbird]});
+        content.MetaData.Add(new Metadata("background-type", "translate") { Category = [Meta.Categories.Blackbird]});
 
         return new StartBatchResponse
         {
