@@ -53,7 +53,7 @@ public sealed class GeminiRestGenerativeModelClient(IGeminiApiClient geminiApiCl
                 GenerationConfig = new GeminiGenerationConfig
                 {
                     ResponseSchema = schema,
-                    ResponseMimeType = "application/json",
+                    ResponseMimeType = schema is null ? null : "application/json",
                     Temperature = input.Temperature ?? 0.9f,
                     TopP = input.TopP ?? 1.0f,
                     TopK = input.TopK ?? 3,
