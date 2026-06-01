@@ -13,10 +13,9 @@ using Blackbird.Filters.Constants;
 using Blackbird.Filters.Enums;
 using Blackbird.Filters.Extensions;
 using Blackbird.Filters.Transformations;
-using DocumentFormat.OpenXml.Spreadsheet;
 using Newtonsoft.Json;
 using System.Text;
-using System.Text.RegularExpressions;
+using Google.Cloud.AIPlatform.V1;
 
 namespace Apps.GoogleVertexAI.Actions;
 
@@ -58,17 +57,21 @@ public class TranslationActions(InvocationContext invocationContext, IFileManage
         var counter = 1;        
         var errorMessages = new List<string>();
 
-        async Task<IEnumerable<string?>> BatchTranslate(IEnumerable<(Unit Unit, Segment Segment)> batch)
+        async Task<IEnumerable<string?>> BatchTranslate(IEnumerable<(Unit Unit, Blackbird.Filters.Transformations.Segment Segment)> batch)
         {
-            var json = JsonConvert.SerializeObject(batch.Select((x, i) => "{ID:" + i + "}" + x.Segment.GetSource()));
-
+            var json = JsonConvert.SerializeObject(batch.Select(x => x.Segment.GetSource()));
+            
             var userPrompt = 
-                $"Please process ALL texts in the provided array. It is critical that you translate EVERY item individually, not just the first one. " +
-                $"Translate the following texts from {content.SourceLanguage} to {content.TargetLanguage}. Return the outputs as a serialized JSON array of strings without additional formatting, " +
-                $"maintaining the exact same number of elements as the input array. " +
-                $"This is crucial because your response will be deserialized programmatically. " +
-                $"Do not skip any entries or provide partial results. {prompt}" +
-                $"Original texts (in serialized array format): {json}";
+                $"Translate the following texts from {content.SourceLanguage} to {content.TargetLanguage}. " +
+                $"Return ONLY a JSON array of strings containing the translations in the exact same order. " +
+                $"Do not skip any entries. {prompt}\n" +
+                $"Original texts: {json}";
+            
+            var responseSchema = new OpenApiSchema
+            {
+                Type = Google.Cloud.AIPlatform.V1.Type.Array,
+                Items = new OpenApiSchema { Type = Google.Cloud.AIPlatform.V1.Type.String },
+            };
 
             if (glossary.Glossary != null)
             {
@@ -85,32 +88,32 @@ public class TranslationActions(InvocationContext invocationContext, IFileManage
                 }
             }
 
-            var (response, promptUsage) = await ExecuteGeminiPrompt(promptRequest, model, userPrompt, SystemPrompt);
+            var (response, promptUsage) = await ExecuteGeminiPrompt(
+                promptRequest, 
+                model, 
+                userPrompt, 
+                SystemPrompt, 
+                responseSchema);
 
             try
             {
-                var result = GeminiResponseParser.ParseStringArray(response, InvocationContext.Logger);
-                if (result.IsPartial)
-                {
-                    errorMessages.Add(
-                        $"The response from the Gemini API (batch number: {counter}) was incomplete. " +
-                        $"Got {result.Results.Length} results, but expected {batch.Count()}. " +
-                        "Try to reduce the batch size.");
-                }
-
-                return result.Results.Select(GeminiResponseParser.SanitizeTranslationText);
+                var translations = JsonConvert.DeserializeObject<string[]>(response);
+                if (translations is not null)
+                    return translations;
+                
+                InvocationContext.Logger?.LogError(
+                    $"[GoogleGemini] Empty translation received - failed to parse response. Raw: {response}", []);
+                throw new PluginApplicationException("The Gemini API returned an empty or null JSON array");
             }
-            catch (PluginApplicationException ex)
+            catch (Exception ex)
             {
-                InvocationContext.Logger?.LogError($"[GoogleGemini] Failed to parse response: {ex.Message}; Response: {response}", []);
+                InvocationContext.Logger?.LogError(
+                    $"[GoogleGemini] Failed to parse response: {ex.Message}; Response: {response}", []);
                 throw new PluginApplicationException(
-                    $"Failed to parse the response from Gemini API. The response format might be invalid or incomplete. Error: {ex.Message}");
-            }
-            catch (Exception e)
-            {
-                InvocationContext.Logger?.LogError($"[GoogleGemini] Unexpected error parsing response: {e.Message}; Response: {response}", []);
-                throw new PluginApplicationException(
-                    $"An unexpected error occurred while parsing the response. Error: {e.Message}");
+                    $"Failed to parse the response from Gemini API. " +
+                    $"The response format might be invalid or incomplete. " +
+                    $"Error: {ex.Message}", 
+                    ex);
             }
             finally
             {

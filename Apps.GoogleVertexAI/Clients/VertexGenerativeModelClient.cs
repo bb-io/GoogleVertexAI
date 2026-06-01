@@ -3,10 +3,8 @@ using Apps.GoogleVertexAI.Clients.Abstractions;
 using Apps.GoogleVertexAI.Constants;
 using Apps.GoogleVertexAI.Models.Dto;
 using Apps.GoogleVertexAI.Models.Requests;
-using Apps.GoogleVertexAI.Models.Response;
 using Apps.GoogleVertexAI.Utils;
 using Blackbird.Applications.Sdk.Common.Exceptions;
-using Google.Api.Gax;
 using Google.Cloud.AIPlatform.V1;
 
 namespace Apps.GoogleVertexAI.Clients;
@@ -19,8 +17,6 @@ public sealed class VertexGenerativeModelClient(
     Blackbird.Applications.Sdk.Common.Invocation.Logger? logger)
     : GenerativeModelClientBase, IGenerativeModelClient
 {
-    private readonly PredictionServiceClient _client = client;
-
     public async Task ValidateConnectionAsync(CancellationToken cancellationToken)
     {
         var isUnprefixed = region.Equals("global", StringComparison.OrdinalIgnoreCase)
@@ -53,6 +49,7 @@ public sealed class VertexGenerativeModelClient(
         string modelId,
         string prompt,
         string? systemPrompt = null,
+        OpenApiSchema? schema = null,
         IEnumerable<Part>? files = null,
         CancellationToken cancellationToken = default)
     {
@@ -79,6 +76,8 @@ public sealed class VertexGenerativeModelClient(
             Model = endpoint,
             GenerationConfig = new GenerationConfig
             {
+                ResponseSchema = schema,
+                ResponseMimeType = "application/json",
                 Temperature = input.Temperature ?? 0.9f,
                 TopP = input.TopP ?? 1.0f,
                 TopK = input.TopK ?? 3,
@@ -99,7 +98,7 @@ public sealed class VertexGenerativeModelClient(
 
         try
         {
-            using var response = ErrorHandler.ExecuteWithErrorHandling(() => _client.StreamGenerateContent(generateContentRequest));
+            using var response = ErrorHandler.ExecuteWithErrorHandling(() => client.StreamGenerateContent(generateContentRequest));
             var responseStream = response.GetResponseStream();
 
             var generatedText = new StringBuilder();

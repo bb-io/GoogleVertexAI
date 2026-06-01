@@ -1,3 +1,4 @@
+using Google.Cloud.AIPlatform.V1;
 using Newtonsoft.Json;
 
 namespace Apps.GoogleVertexAI.Models.Dto;
@@ -175,6 +176,12 @@ public class GeminiPart
 
 public class GeminiGenerationConfig
 {
+    [JsonProperty("responseSchema")]
+    public OpenApiSchema? ResponseSchema { get; set; }
+    
+    [JsonProperty("responseMimeType")]
+    public string? ResponseMimeType { get; set; }
+    
     [JsonProperty("temperature")]
     public float Temperature { get; set; }
 

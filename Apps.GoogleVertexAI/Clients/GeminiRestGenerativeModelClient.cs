@@ -1,7 +1,6 @@
 using Apps.GoogleVertexAI.Clients.Abstractions;
 using Apps.GoogleVertexAI.Models.Dto;
 using Apps.GoogleVertexAI.Models.Requests;
-using Apps.GoogleVertexAI.Models.Response;
 using Apps.GoogleVertexAI.Utils;
 using Blackbird.Applications.Sdk.Common.Exceptions;
 using Google.Cloud.AIPlatform.V1;
@@ -23,6 +22,7 @@ public sealed class GeminiRestGenerativeModelClient(IGeminiApiClient geminiApiCl
         string modelId,
         string prompt,
         string? systemPrompt = null,
+        OpenApiSchema? schema = null,
         IEnumerable<Part>? files = null,
         CancellationToken cancellationToken = default)
     {
@@ -52,6 +52,8 @@ public sealed class GeminiRestGenerativeModelClient(IGeminiApiClient geminiApiCl
                 ],
                 GenerationConfig = new GeminiGenerationConfig
                 {
+                    ResponseSchema = schema,
+                    ResponseMimeType = "application/json",
                     Temperature = input.Temperature ?? 0.9f,
                     TopP = input.TopP ?? 1.0f,
                     TopK = input.TopK ?? 3,
