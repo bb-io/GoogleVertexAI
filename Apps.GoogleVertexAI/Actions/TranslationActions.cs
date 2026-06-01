@@ -15,7 +15,8 @@ using Blackbird.Filters.Extensions;
 using Blackbird.Filters.Transformations;
 using Newtonsoft.Json;
 using System.Text;
-using Google.Cloud.AIPlatform.V1;
+using Apps.GoogleVertexAI.Constants;
+using Apps.GoogleVertexAI.Models.Dto;
 
 namespace Apps.GoogleVertexAI.Actions;
 
@@ -59,19 +60,18 @@ public class TranslationActions(InvocationContext invocationContext, IFileManage
 
         async Task<IEnumerable<string?>> BatchTranslate(IEnumerable<(Unit Unit, Blackbird.Filters.Transformations.Segment Segment)> batch)
         {
-            var json = JsonConvert.SerializeObject(batch.Select(x => x.Segment.GetSource()));
+            var inputObjects = batch.Select((x, index) => new 
+            { 
+                id = index, 
+                text = x.Segment.GetSource() 
+            });
+            var json = JsonConvert.SerializeObject(inputObjects);
             
             var userPrompt = 
                 $"Translate the following texts from {content.SourceLanguage} to {content.TargetLanguage}. " +
                 $"Return ONLY a JSON array of strings containing the translations in the exact same order. " +
                 $"Do not skip any entries. {prompt}\n" +
                 $"Original texts: {json}";
-            
-            var rawSchema = new 
-            {
-                type = "ARRAY",
-                items = new { type = "STRING" }
-            };
 
             if (glossary.Glossary != null)
             {
@@ -93,13 +93,22 @@ public class TranslationActions(InvocationContext invocationContext, IFileManage
                 model, 
                 userPrompt, 
                 SystemPrompt, 
-                rawSchema);
-
-            string[]? translations;
+                ResponseSchemas.IdTranslationArray);
 
             try
             {
-                translations = JsonConvert.DeserializeObject<string[]>(response);
+                var translations = JsonConvert.DeserializeObject<TranslationResultDto[]>(response) ?? 
+                    throw new Exception("The Gemini API returned an empty or null JSON array.");
+
+                if (translations.Length != batch.Count())
+                {
+                    errorMessages.Add(
+                        $"The response from the Gemini API (batch number: {counter}) was incomplete. " +
+                        $"Got {translations.Length} results, but expected {batch.Count()}. " +
+                        "Try to reduce the batch size.");
+                }
+
+                return translations.OrderBy(x => x.Id).Select(x => x.Translation);
             }
             catch (Exception ex)
             {
@@ -115,15 +124,9 @@ public class TranslationActions(InvocationContext invocationContext, IFileManage
             {
                 counter++;
             }
-
-            if (translations is not null)
-                return translations;
-
-            InvocationContext.Logger?.LogError(
-                $"[GoogleGemini] Empty translation received - failed to parse response. Raw: {response}", []);
-            throw new PluginApplicationException("The Gemini API returned an empty or null JSON array.");
         }
 
+        result.ErrorMessages = errorMessages;
         var units = content.GetUnits().ToList();
         result.TotalSegmentsCount = units.SelectMany(x => x.Segments).Count();
         

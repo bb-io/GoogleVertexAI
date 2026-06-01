@@ -17,6 +17,7 @@ public class TranslateActionsTests : TestBase
     [TestMethod]
     public async Task Translate_WithHtmlContent_IsSuccess()
     {
+        // Arrange
         var actions = new TranslationActions(InvocationContext, FileManager);
         var translateRequest = new TranslateFileRequest
         {
@@ -27,11 +28,15 @@ public class TranslateActionsTests : TestBase
         };
         string systemMessage = "";
         var glossaryRequest = new GlossaryRequest();
+        var promptRequest = new PromptRequest();
 
-        var result = await actions.TranslateContent(translateRequest, new PromptRequest(), systemMessage, glossaryRequest);
+        // Act
+        var result = await actions.TranslateContent(translateRequest, promptRequest, systemMessage, glossaryRequest);
+        
+        // Assert
+        PrintResult(result);
         Assert.IsNotNull(result);
-
-        Console.WriteLine(JsonConvert.SerializeObject(result, Formatting.Indented));
+        Assert.IsEmpty(result.ErrorMessages!, "Errors occured during translation");
     }
 
     [TestMethod]
