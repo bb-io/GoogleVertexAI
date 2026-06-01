@@ -81,7 +81,7 @@ public class VertexAiInvocable : BaseInvocable
         string modelId,
         string prompt,
         string? systemPrompt = null,
-        OpenApiSchema? schema = null,
+        object? schema = null,
         IEnumerable<Part>? files = null)
         => await _generativeModelClient.GenerateTextAsync(input, modelId, prompt, systemPrompt, schema, files);
 

@@ -67,10 +67,10 @@ public class TranslationActions(InvocationContext invocationContext, IFileManage
                 $"Do not skip any entries. {prompt}\n" +
                 $"Original texts: {json}";
             
-            var responseSchema = new OpenApiSchema
+            var rawSchema = new 
             {
-                Type = Google.Cloud.AIPlatform.V1.Type.Array,
-                Items = new OpenApiSchema { Type = Google.Cloud.AIPlatform.V1.Type.String },
+                type = "ARRAY",
+                items = new { type = "STRING" }
             };
 
             if (glossary.Glossary != null)
@@ -93,7 +93,7 @@ public class TranslationActions(InvocationContext invocationContext, IFileManage
                 model, 
                 userPrompt, 
                 SystemPrompt, 
-                responseSchema);
+                rawSchema);
 
             try
             {

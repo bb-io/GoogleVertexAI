@@ -22,7 +22,7 @@ public class TranslateActionsTests : TestBase
         {
             File = new FileReference { Name = "contentful.html" },
             TargetLanguage = "ja-jp",
-            AIModel = "gemini-3.1-flash-lite-preview",
+            AIModel = "gemini-2.5-flash-lite",
             OutputFileHandling = "original",
         };
         string systemMessage = "";

@@ -6,6 +6,7 @@ using Apps.GoogleVertexAI.Models.Requests;
 using Apps.GoogleVertexAI.Utils;
 using Blackbird.Applications.Sdk.Common.Exceptions;
 using Google.Cloud.AIPlatform.V1;
+using Newtonsoft.Json;
 
 namespace Apps.GoogleVertexAI.Clients;
 
@@ -49,7 +50,7 @@ public sealed class VertexGenerativeModelClient(
         string modelId,
         string prompt,
         string? systemPrompt = null,
-        OpenApiSchema? schema = null,
+        object? schema = null,
         IEnumerable<Part>? files = null,
         CancellationToken cancellationToken = default)
     {
@@ -70,19 +71,26 @@ public sealed class VertexGenerativeModelClient(
                 content.Parts.Add(file);
             }
         }
+        
+        var config = new GenerationConfig
+        {
+            Temperature = input.Temperature ?? 0.9f,
+            TopP = input.TopP ?? 1.0f,
+            TopK = input.TopK ?? 3,
+            MaxOutputTokens = input.MaxOutputTokens ?? ModelTokenService.GetMaxTokensForModel(modelId),
+        };
+
+        if (schema is not null)
+        {
+            string jsonSchemaString = JsonConvert.SerializeObject(schema);
+            config.ResponseMimeType = "application/json";
+            config.ResponseJsonSchema = Google.Protobuf.WellKnownTypes.Value.Parser.ParseJson(jsonSchemaString);
+        }
 
         var generateContentRequest = new GenerateContentRequest
         {
             Model = endpoint,
-            GenerationConfig = new GenerationConfig
-            {
-                ResponseSchema = schema,
-                ResponseMimeType = "application/json",
-                Temperature = input.Temperature ?? 0.9f,
-                TopP = input.TopP ?? 1.0f,
-                TopK = input.TopK ?? 3,
-                MaxOutputTokens = input.MaxOutputTokens ?? ModelTokenService.GetMaxTokensForModel(modelId),
-            },
+            GenerationConfig = config,
             SafetySettings = { BuildVertexSafetySettings(input) },
             SystemInstruction = systemPrompt is null
                 ? null
