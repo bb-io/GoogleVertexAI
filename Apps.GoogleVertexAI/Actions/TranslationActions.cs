@@ -98,7 +98,7 @@ public class TranslationActions(InvocationContext invocationContext, IFileManage
             try
             {
                 var translations = JsonConvert.DeserializeObject<TranslationResultDto[]>(response) ?? 
-                    throw new Exception("The Gemini API returned an empty or null JSON array.");
+                    throw new PluginApplicationException("The Gemini API returned an empty or null JSON array.");
 
                 if (translations.Length != batch.Count())
                 {
