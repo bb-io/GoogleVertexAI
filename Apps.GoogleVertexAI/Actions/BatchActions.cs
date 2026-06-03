@@ -1,6 +1,4 @@
-﻿using Apps.GoogleVertexAI.Constants;
-using Apps.GoogleVertexAI.Factories;
-using Apps.GoogleVertexAI.Helpers;
+﻿using Apps.GoogleVertexAI.Factories;
 using Apps.GoogleVertexAI.Invocables;
 using Apps.GoogleVertexAI.Models.Dto;
 using Apps.GoogleVertexAI.Models.Requests;
@@ -10,28 +8,28 @@ using Blackbird.Applications.Sdk.Common;
 using Blackbird.Applications.Sdk.Common.Actions;
 using Blackbird.Applications.Sdk.Common.Exceptions;
 using Blackbird.Applications.Sdk.Common.Invocation;
-using Blackbird.Applications.Sdk.Utils.Extensions.Sdk;
 using Blackbird.Applications.SDK.Extensions.FileManagement.Interfaces;
 using Blackbird.Filters.Constants;
 using Blackbird.Filters.Enums;
 using Blackbird.Filters.Extensions;
 using Blackbird.Filters.Transformations;
 using Google.Cloud.AIPlatform.V1;
-using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using Newtonsoft.Json;
 
 namespace Apps.GoogleVertexAI.Actions;
 
 [ActionList("Background")]
-public class BatchActions(InvocationContext invocationContext, IFileManagementClient fileManagementClient) : VertexAiInvocable(invocationContext)
+public class BatchActions(InvocationContext invocationContext, IFileManagementClient fileManagementClient) 
+    : VertexAiInvocable(invocationContext)
 {
     [Action("Download background file",
-    Description = "Reads batch output from GCS and merges output into original file.")]
+        Description = "Reads batch output from GCS and merges output into original file.")]
     public async Task<BatchFileResponse> DownloadXliffFromBatch(
-    [ActionParameter, Display("Batch job name")] string jobName,
-    [ActionParameter] GetBatchResultRequest originalXliff)
+        [ActionParameter, Display("Batch job name")] string jobName,
+        [ActionParameter] GetBatchResultRequest originalXliff)
     {
         var region = TryGetLocationFromJobName(jobName, out var loc) ? loc : ResolveVertexRegion();
 
@@ -39,7 +37,7 @@ public class BatchActions(InvocationContext invocationContext, IFileManagementCl
             InvocationContext.AuthenticationCredentialsProviders,
             region);
 
-        var job = jobClient.GetBatchPredictionJob(jobName);
+        var job = await jobClient.GetBatchPredictionJobAsync(jobName);
 
         if (job.State != JobState.Succeeded)
             throw new PluginApplicationException($"Batch job is not ready. Current state: {job.State}");
@@ -60,7 +58,7 @@ public class BatchActions(InvocationContext invocationContext, IFileManagementCl
             .OrderBy(o => o.Name)
             .ToList();
 
-        if (!objects.Any())
+        if (objects.Count == 0)
             throw new PluginApplicationException("No JSONL outputs found in batch destination.");
 
         var stream = await fileManagementClient.DownloadAsync(originalXliff.OriginalXliff);
@@ -79,7 +77,6 @@ public class BatchActions(InvocationContext invocationContext, IFileManagementCl
         var usage = new UsageDto();
         var warnings = new List<string>();
         var processedCount = 0;
-        var globalIndex = 0;
         
         foreach (var obj in objects)
         {
@@ -88,8 +85,7 @@ public class BatchActions(InvocationContext invocationContext, IFileManagementCl
             ms.Position = 0;
 
             using var sr = new StreamReader(ms);
-            string? line;
-            while ((line = await sr.ReadLineAsync()) != null)
+            while (await sr.ReadLineAsync() is { } line)
             {
                 if (string.IsNullOrWhiteSpace(line)) continue;
                 var jo = JObject.Parse(line);
@@ -114,58 +110,47 @@ public class BatchActions(InvocationContext invocationContext, IFileManagementCl
                 }
 
                 var text = ExtractTextFromResponse(resp);
-                if (string.IsNullOrWhiteSpace(text)) continue;
+                if (string.IsNullOrWhiteSpace(text)) 
+                    continue;
                 
-                var matches = Regex.Matches(text, "\\{ID:(.*?)\\}(.*?)(?=\\{ID:|$)", 
-                    RegexOptions.Singleline);
-                
-                if (matches.Count == 0)
+                try
                 {
-                    try
+                    var parsedResults = JsonConvert.DeserializeObject<TranslationResultDto[]>(text);
+                    if (parsedResults != null)
                     {
-                        var arrayResponse = GeminiResponseParser.ParseStringArray(text, InvocationContext.Logger);
-                        foreach (var item in arrayResponse.Results)
+                        foreach (var result in parsedResults)
                         {
-                            translations.Add(globalIndex.ToString(), GeminiResponseParser.SanitizeTranslationText(item));
-                            globalIndex += 1;
-                        }
-                    }
-                    catch
-                    {
-                        var bracketMatches = Regex.Matches(text, "\\[ID:(.*?)\\]\\{(.*?)\\}",
-                            RegexOptions.Singleline);
-                        
-                        foreach (Match match in bracketMatches)
-                        {
-                            if (match.Success && !string.IsNullOrEmpty(match.Groups[1].Value))
-                            {
-                                var id = match.Groups[1].Value.Trim();
-                                var content = GeminiResponseParser.SanitizeTranslationText(match.Groups[2].Value.Trim());
-
-                                if (!translations.ContainsKey(id))
-                                {
-                                    translations[id] = content;
-                                    processedCount++;
-                                }
-                            }
+                            translations[result.Id.ToString()] = result.Translation;
+                            processedCount++;
                         }
                     }
                 }
-                else
+                catch (JsonException)
                 {
-                    foreach (Match match in matches)
+                    // Legacy fallback
+                    var legacyMatches = Regex.Matches(text, "\\{ID:(.*?)\\}(.*?)(?=\\{ID:|$)", RegexOptions.Singleline);
+    
+                    if (legacyMatches.Count > 0)
                     {
-                        if (match.Success && !string.IsNullOrEmpty(match.Groups[1].Value))
+                        foreach (Match match in legacyMatches)
                         {
+                            if (!match.Success || string.IsNullOrEmpty(match.Groups[1].Value)) 
+                                continue;
+                            
                             var id = match.Groups[1].Value.Trim();
-                            var content = GeminiResponseParser.SanitizeTranslationText(match.Groups[2].Value.Trim());
+                            var content = match.Groups[2].Value.Trim();
 
-                            if (!translations.ContainsKey(id))
-                            {
-                                translations[id] = content;
-                                processedCount++;
-                            }
+                            if (!translations.TryAdd(id, content)) 
+                                continue;
+
+                            processedCount++;
                         }
+                    }
+                    else
+                    {
+                        InvocationContext.Logger?.LogError(
+                            $"[GoogleGemini] Failed to parse batch line (tried JSON and legacy). Raw: {text}", []);
+                        warnings.Add("Failed to parse a batch result.");
                     }
                 }
             }
@@ -176,34 +161,38 @@ public class BatchActions(InvocationContext invocationContext, IFileManagementCl
         var updatedCount = 0;
         foreach (var pair in originalSegments.Select((segment, index) => new { segment, index }))
         {
-            if (translations.TryGetValue(pair.index.ToString(), out var tgt))
-            {                
-                if (backgroundType == "translate")
+            if (!translations.TryGetValue(pair.index.ToString(), out var tgt)) 
+                continue;
+            
+            if (backgroundType == "translate")
+            {
+                pair.segment.SetTarget(tgt);
+                pair.segment.State = SegmentState.Translated;
+                updatedCount++;
+            }
+            else if (backgroundType == "edit")
+            {
+                if (pair.segment.GetTarget() != tgt)
                 {
-                    pair.segment.SetTarget(GeminiResponseParser.SanitizeTranslationText(tgt));
-                    pair.segment.State = SegmentState.Translated;
+                    pair.segment.SetTarget(tgt);
                     updatedCount++;
                 }
-                else if (backgroundType == "edit")
-                {
-                    var sanitizedTarget = GeminiResponseParser.SanitizeTranslationText(tgt);
-                    if (pair.segment.GetTarget() != sanitizedTarget)
-                    {
-                        pair.segment.SetTarget(sanitizedTarget);
-                        updatedCount++;
-                    }
-                    pair.segment.State = SegmentState.Reviewed;
-                }
-                else
-                {
-                    pair.segment.SetTarget(GeminiResponseParser.SanitizeTranslationText(tgt));
-                    updatedCount++;
-                }
-            }                
+                pair.segment.State = SegmentState.Reviewed;
+            }
+            else
+            {
+                pair.segment.SetTarget(tgt);
+                updatedCount++;
+            }
         }
 
-        var outFile = await fileManagementClient.UploadAsync(transformation.Serialize().ToStream(), MediaTypes.Xliff, transformation.XliffFileName);
-        return new BatchFileResponse { 
+        var outFile = await fileManagementClient.UploadAsync(
+            transformation.Serialize().ToStream(), 
+            MediaTypes.Xliff, 
+            transformation.XliffFileName);
+        
+        return new BatchFileResponse 
+        { 
             File = outFile, 
             Usage = usage, 
             Warnings = warnings,
@@ -214,17 +203,12 @@ public class BatchActions(InvocationContext invocationContext, IFileManagementCl
     }
 
     [Action("Get background result",
-    Description = "Reads batch output from GCS and returns the combined output.")]
-    public async Task<BatchResult> GetBackgroundResult(
-    [ActionParameter, Display("Batch job name")] string jobName)
+        Description = "Reads batch output from GCS and returns the combined output.")]
+    public async Task<BatchResult> GetBackgroundResult([ActionParameter, Display("Batch job name")] string jobName)
     {
         var region = TryGetLocationFromJobName(jobName, out var loc) ? loc : ResolveVertexRegion();
-
-        var jobClient = ClientFactory.CreateJobService(
-            InvocationContext.AuthenticationCredentialsProviders,
-            region);
-
-        var job = jobClient.GetBatchPredictionJob(jobName);
+        var jobClient = ClientFactory.CreateJobService(Creds, region);
+        var job = await jobClient.GetBatchPredictionJobAsync(jobName);
 
         if (job.State != JobState.Succeeded)
             throw new PluginApplicationException($"Batch job is not ready. Current state: {job.State}");
@@ -248,10 +232,9 @@ public class BatchActions(InvocationContext invocationContext, IFileManagementCl
         if (!objects.Any())
             throw new PluginApplicationException("No JSONL outputs found in batch destination.");
 
-        var translations = new Dictionary<string, string>();
         var usage = new UsageDto();
         var warnings = new List<string>();
-        var result = string.Empty;
+        var resultBuilder = new StringBuilder();
 
         foreach (var obj in objects)
         {
@@ -260,8 +243,7 @@ public class BatchActions(InvocationContext invocationContext, IFileManagementCl
             ms.Position = 0;
 
             using var sr = new StreamReader(ms);
-            string? line;
-            while ((line = await sr.ReadLineAsync()) != null)
+            while (await sr.ReadLineAsync() is { } line)
             {
                 if (string.IsNullOrWhiteSpace(line)) continue;
                 var jo = JObject.Parse(line);
@@ -286,11 +268,17 @@ public class BatchActions(InvocationContext invocationContext, IFileManagementCl
                 }
 
                 var text = ExtractTextFromResponse(resp);
-                result += text;                
+                if (!string.IsNullOrWhiteSpace(text))
+                    resultBuilder.AppendLine(text);
             }
         }
 
-        return new BatchResult { Result = result, Usage = usage, Warnings = warnings };
+        return new BatchResult
+        {
+            Result = resultBuilder.ToString().TrimEnd(), 
+            Usage = usage, 
+            Warnings = warnings
+        };
     }
 
     private static string ExtractTextFromResponse(JToken response)

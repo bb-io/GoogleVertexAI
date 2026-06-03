@@ -12,7 +12,7 @@ namespace Tests.GoogleVertexAI;
 [TestClass]
 public class EditActionTests : TestBase
 {
-    private const string ModelName = "gemini-3-pro-preview";
+    private const string ModelName = "gemini-2.5-flash";
 
     [TestMethod]
     public async Task Edit_xliff()
@@ -27,10 +27,12 @@ public class EditActionTests : TestBase
         var glossaryRequest = new GlossaryRequest();
 
         var result = await actions.EditContent(translateRequest, new PromptRequest { }, systemMessage, glossaryRequest);
+        
+
+        PrintResult(result);
         Assert.IsNotNull(result);
         Assert.IsTrue(result.File.Name.Contains("contentful"));
-
-        Console.WriteLine(JsonConvert.SerializeObject(result, Formatting.Indented));
+        Assert.IsEmpty(result.ErrorMessages!, "Errors received while editing content");
     }
 
     [TestMethod]

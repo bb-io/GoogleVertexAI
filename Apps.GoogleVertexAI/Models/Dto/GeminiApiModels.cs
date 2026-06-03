@@ -175,6 +175,12 @@ public class GeminiPart
 
 public class GeminiGenerationConfig
 {
+    [JsonProperty("responseSchema", NullValueHandling = NullValueHandling.Ignore)]
+    public object? ResponseSchema { get; set; }
+    
+    [JsonProperty("responseMimeType", NullValueHandling = NullValueHandling.Ignore)]
+    public string? ResponseMimeType { get; set; }
+    
     [JsonProperty("temperature")]
     public float Temperature { get; set; }
 

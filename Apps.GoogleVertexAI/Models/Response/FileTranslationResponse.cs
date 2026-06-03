@@ -18,4 +18,7 @@ public class FileTranslationResponse : ITranslateFileOutput
 
     [Display("Processed batches")]
     public int ProcessedBatchesCount { get; set; }
+
+    [Display("Error messages")]
+    public IEnumerable<string>? ErrorMessages { get; set; }
 }

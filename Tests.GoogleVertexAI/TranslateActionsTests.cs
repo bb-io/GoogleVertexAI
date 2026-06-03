@@ -15,24 +15,28 @@ public class TranslateActionsTests : TestBase
     private const string ModelName = "gemini-3-pro-preview";
 
     [TestMethod]
-    public async Task Translate_html()
+    public async Task Translate_WithHtmlContent_IsSuccess()
     {
+        // Arrange
         var actions = new TranslationActions(InvocationContext, FileManager);
         var translateRequest = new TranslateFileRequest
         {
-            File = new FileReference { Name = "" },
+            File = new FileReference { Name = "contentful.html" },
             TargetLanguage = "ja-jp",
-            AIModel = ModelName,
+            AIModel = "gemini-2.5-flash-lite",
             OutputFileHandling = "original",
         };
-        string? systemMessage = "";
-        var glossaryRequest = new GlossaryRequest { Glossary= new FileReference { Name = "Glossary.tbx" } };
+        string systemMessage = "";
+        var glossaryRequest = new GlossaryRequest();
+        var promptRequest = new PromptRequest();
 
-        var result = await actions.TranslateContent(translateRequest, new PromptRequest { }, systemMessage, glossaryRequest);
+        // Act
+        var result = await actions.TranslateContent(translateRequest, promptRequest, systemMessage, glossaryRequest);
+        
+        // Assert
+        PrintResult(result);
         Assert.IsNotNull(result);
-        //Assert.IsTrue(result.File.Name.Contains("contentful"));
-
-        Console.WriteLine(JsonConvert.SerializeObject(result, Formatting.Indented));
+        Assert.IsEmpty(result.ErrorMessages!, "Errors occured during translation");
     }
 
     [TestMethod]

@@ -13,6 +13,7 @@ public interface IGenerativeModelClient
         string modelId,
         string prompt,
         string? systemPrompt = null,
+        object? schema = null,
         IEnumerable<Part>? files = null,
         CancellationToken cancellationToken = default);
 }
