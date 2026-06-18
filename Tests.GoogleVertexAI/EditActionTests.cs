@@ -33,9 +33,9 @@ public class EditActionTests : TestBase
                 BatchSize = 1,
                 RetryCount = 3,
             },
-            new PromptRequest { Temperature = 0.2f, MaxOutputTokens = 1000 },
             "Use German. For the over-limit target, a valid concise option is `Kurztitel`.",
-            null);
+            null,
+            new PromptRequest { Temperature = 0.2f, MaxOutputTokens = 1000 });
 
         var output = await ParseOutput(result.File);
         var shortenedUnit = output.GetUnits().Single(x => x.Id == "translated-over-limit");
@@ -75,9 +75,9 @@ public class EditActionTests : TestBase
                 BatchSize = 1,
                 RetryCount = 3,
             },
-            new PromptRequest { Temperature = 0.0f, MaxOutputTokens = 1000 },
             "Use German. For the long Multilingual Content Operations unit, return exactly this target segment: `Mehrsprachige Content Ops machen Sprache zum Wachstumsmotor. Blackbird hilft Inhalten, Ziele zu erreichen und Verbindungen zu schaffen.`",
-            null);
+            null,
+            new PromptRequest { Temperature = 0.0f, MaxOutputTokens = 1000 });
 
         var output = await ParseOutput(result.File);
         var translatedRestrictedUnit = output.GetUnits().Single(x => x.Id == "vQl02fa2sN2aX16G1_dc10:1");
