@@ -86,6 +86,7 @@ Before you can connect you need to make sure that:
 - **Edit** Edit a translation. This action assumes you have previously translated content in Blackbird through any translation action. Only looks at translated segments and will change the segment state to reviewed.
 - **Edit in background** similar to the previous action, except that this creates a long running process in the background not blocking your parallel actions. Use in conjunction with a checkpoint to download the result file of this long running background job.
 - **Edit Text** given a source segment and translated target segment, responds with an edited version of the target segment taking into account typical mistakes.
+- **Shorten content** Shorten XLIFF target content to fit slr:sizeRestriction values.
 
 - > Note: files are interoperable, under the hood Blackbird may convert to and from bilingual files with metadata but all our Actions are able to accept a lot of different file formats.
 

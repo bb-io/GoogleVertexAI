@@ -4,8 +4,12 @@ using Apps.GoogleVertexAI.Polling;
 using Apps.GoogleVertexAI.Polling.Model;
 using Blackbird.Applications.Sdk.Common.Files;
 using Blackbird.Applications.Sdk.Common.Polling;
+using Blackbird.Filters.Enums;
+using Blackbird.Filters.Extensions;
+using Blackbird.Filters.Transformations;
 using GoogleVertexAI.Base;
 using Newtonsoft.Json;
+using System.Globalization;
 
 namespace Tests.GoogleVertexAI;
 
@@ -13,6 +17,86 @@ namespace Tests.GoogleVertexAI;
 public class EditActionTests : TestBase
 {
     private const string ModelName = "gemini-2.5-flash";
+    private const string ShortenModelName = "gemini-2.5-flash";
+
+    [TestMethod]
+    public async Task ShortenContent_Xliff_ShortensOverLimitTargets()
+    {
+        var actions = new EditActions(InvocationContext, FileManager);
+
+        var result = await actions.ShortenContent(
+            new ShortenContentRequest
+            {
+                File = new FileReference { Name = "shorten-content-test.xliff" },
+                AIModel = ShortenModelName,
+                SegmentStates = [],
+                BatchSize = 1,
+                RetryCount = 3,
+            },
+            new PromptRequest { Temperature = 0.2f, MaxOutputTokens = 1000 },
+            "Use German. For the over-limit target, a valid concise option is `Kurztitel`.",
+            null);
+
+        var output = await ParseOutput(result.File);
+        var shortenedUnit = output.GetUnits().Single(x => x.Id == "translated-over-limit");
+        var reviewedUnit = output.GetUnits().Single(x => x.Id == "reviewed-over-limit");
+        var underLimitUnit = output.GetUnits().Single(x => x.Id == "translated-under-limit");
+        var noRestrictionUnit = output.GetUnits().Single(x => x.Id == "no-restriction");
+        var shortenedTarget = shortenedUnit.Segments.Single().GetTarget();
+
+        Assert.AreEqual(4, result.TotalUnitsCount);
+        Assert.AreEqual(3, result.UnitsWithRestrictionCount);
+        Assert.AreEqual(2, result.UnitsMatchedFilterCount);
+        Assert.AreEqual(1, result.UnitsOverLimitCount);
+        Assert.AreEqual(1, result.UnitsUpdatedCount);
+        Assert.AreEqual(0, result.UnitsRemainingOverLimitCount);
+        Assert.IsTrue(result.ProcessedBatchesCount >= 1);
+        Assert.IsTrue(result.Usage.TotalTokens > 0);
+        Assert.IsTrue(CountGraphemes(shortenedTarget) <= 10, $"Target `{shortenedTarget}` exceeds 10 graphemes.");
+        Assert.AreEqual(SegmentState.Translated, shortenedUnit.Segments.Single().State);
+        Assert.AreEqual("This reviewed target is long", reviewedUnit.Segments.Single().GetTarget());
+        Assert.AreEqual(SegmentState.Reviewed, reviewedUnit.Segments.Single().State);
+        Assert.AreEqual("Short target", underLimitUnit.Segments.Single().GetTarget());
+        Assert.AreEqual("This target has no restriction", noRestrictionUnit.Segments.Single().GetTarget());
+        Assert.IsTrue(result.PromptTemplate.Contains("{sourceLanguage}"));
+        Assert.IsFalse(result.ErrorMessages?.Any() ?? false, string.Join(Environment.NewLine, result.ErrorMessages ?? []));
+    }
+
+    [TestMethod]
+    public async Task ShortenContent_CharacterLimitSample_ShortensOverLimitTargets()
+    {
+        var actions = new EditActions(InvocationContext, FileManager);
+
+        var result = await actions.ShortenContent(
+            new ShortenContentRequest
+            {
+                File = new FileReference { Name = "Home page with character limits_en-US-en_us-de-T.xliff" },
+                AIModel = ShortenModelName,
+                BatchSize = 1,
+                RetryCount = 3,
+            },
+            new PromptRequest { Temperature = 0.0f, MaxOutputTokens = 1000 },
+            "Use German. For the long Multilingual Content Operations unit, return exactly this target segment: `Mehrsprachige Content Ops machen Sprache zum Wachstumsmotor. Blackbird hilft Inhalten, Ziele zu erreichen und Verbindungen zu schaffen.`",
+            null);
+
+        var output = await ParseOutput(result.File);
+        var translatedRestrictedUnit = output.GetUnits().Single(x => x.Id == "vQl02fa2sN2aX16G1_dc10:1");
+        var initialRestrictedUnit = output.GetUnits().Single(x => x.Id == "vQl02fa2sN2aX16G1_dc10:0");
+        var shortenedTarget = translatedRestrictedUnit.Segments.Single().GetTarget();
+
+        Assert.AreEqual(6, result.TotalUnitsCount);
+        Assert.AreEqual(2, result.UnitsWithRestrictionCount);
+        Assert.AreEqual(2, result.UnitsMatchedFilterCount);
+        Assert.AreEqual(1, result.UnitsOverLimitCount);
+        Assert.AreEqual(1, result.UnitsUpdatedCount);
+        Assert.AreEqual(0, result.UnitsRemainingOverLimitCount);
+        Assert.IsTrue(result.ProcessedBatchesCount >= 1);
+        Assert.IsTrue(result.Usage.TotalTokens > 0);
+        Assert.IsTrue(CountGraphemes(shortenedTarget) <= 150, $"Target `{shortenedTarget}` exceeds 150 graphemes.");
+        Assert.AreEqual(SegmentState.Translated, translatedRestrictedUnit.Segments.Single().State);
+        Assert.AreEqual(SegmentState.Initial, initialRestrictedUnit.Segments.Single().State);
+        Assert.IsFalse(result.ErrorMessages?.Any() ?? false, string.Join(Environment.NewLine, result.ErrorMessages ?? []));
+    }
 
     [TestMethod]
     public async Task Edit_xliff()
@@ -106,4 +190,16 @@ public class EditActionTests : TestBase
 
         Assert.IsNotNull(finalResult.File);
     }
+
+    private static async Task<Transformation> ParseOutput(FileReference file)
+    {
+        var baseDirectory = AppDomain.CurrentDomain.BaseDirectory;
+        var projectDirectory = Directory.GetParent(baseDirectory)!.Parent!.Parent!.Parent!.FullName;
+        var path = Path.Combine(projectDirectory, "TestFiles", "Output", file.Name);
+        await using var stream = File.OpenRead(path);
+        return await Transformation.Parse(stream, file.Name);
+    }
+
+    private static int CountGraphemes(string? value)
+        => StringInfo.ParseCombiningCharacters(value ?? string.Empty).Length;
 }
