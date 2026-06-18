@@ -27,9 +27,9 @@ public class EditActions(InvocationContext invocationContext, IFileManagementCli
     [Action("Shorten content", Description = "Shorten XLIFF target content to fit slr:sizeRestriction values.")]
     public async Task<ShortenContentResponse> ShortenContent(
         [ActionParameter] ShortenContentRequest input,
-        [ActionParameter] PromptRequest promptRequest,
         [ActionParameter, Display("Additional instructions", Description = "Specify additional instructions to apply when shortening.")] string? additionalInstructions,
-        [ActionParameter, Display("System prompt (fully replaces shortening instructions)")] string? customSystemPrompt)
+        [ActionParameter, Display("System prompt (fully replaces shortening instructions)")] string? customSystemPrompt,
+        [ActionParameter] PromptRequest promptRequest)
     {
         const int defaultBatchSize = 1500;
         const int defaultRetryCount = 3;
