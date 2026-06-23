@@ -2,7 +2,6 @@
 using Apps.GoogleVertexAI.Invocables;
 using Apps.GoogleVertexAI.Models.Requests;
 using Apps.GoogleVertexAI.Models.Response;
-using Apps.GoogleVertexAI.Utils;
 using Blackbird.Applications.Sdk.Common;
 using Blackbird.Applications.Sdk.Common.Actions;
 using Blackbird.Applications.Sdk.Common.Exceptions;
@@ -11,12 +10,13 @@ using Blackbird.Applications.SDK.Blueprints;
 using Blackbird.Applications.SDK.Extensions.FileManagement.Interfaces;
 using Blackbird.Filters.Constants;
 using Blackbird.Filters.Enums;
-using Blackbird.Filters.Extensions;
 using Blackbird.Filters.Transformations;
 using Newtonsoft.Json;
 using System.Text;
 using Apps.GoogleVertexAI.Constants;
 using Apps.GoogleVertexAI.Models.Dto;
+using Apps.GoogleVertexAI.Utils;
+using Blackbird.Filters.Extensions;
 
 namespace Apps.GoogleVertexAI.Actions;
 
@@ -45,14 +45,27 @@ public class TranslationActions(InvocationContext invocationContext, IFileManage
         var model = input.AIModel;
         var result = new FileTranslationResponse();
         var stream = await fileManagementClient.DownloadAsync(input.File);
-        var content = await Transformation.Parse(stream, input.File.Name);
+        
+        var loadResult = Transformation.Load(stream, input.File.Name);
+        if (!loadResult.Success)
+            throw new PluginMisconfigurationException(loadResult.Error);
+
+        var content = loadResult.Value;
         content.SourceLanguage ??= input.SourceLanguage;
         content.TargetLanguage ??= input.TargetLanguage;
         if (content.TargetLanguage == null) throw new PluginMisconfigurationException("The target language is not defined yet. Please assign the target language in this action.");
 
         if (content.SourceLanguage == null)
         {
-            content.SourceLanguage = await IdentifySourceLanguage(promptRequest, model, content.Source().GetPlaintext());
+            var sourceLoadResult = content.Source();
+            if (!sourceLoadResult.Success)
+            {
+                throw new PluginMisconfigurationException(
+                    loadResult.Error ?? "An unknown error occured while parsing the content");
+            }
+
+            var source = sourceLoadResult.Value;
+            content.SourceLanguage = await IdentifySourceLanguage(promptRequest, model, source.GetPlaintext());
         }
 
         var counter = 1;        
@@ -161,11 +174,22 @@ public class TranslationActions(InvocationContext invocationContext, IFileManage
 
         if (input.OutputFileHandling == "original")
         {
-            var targetContent = content.Target();
-            result.File = await fileManagementClient.UploadAsync(targetContent.Serialize().ToStream(), targetContent.OriginalMediaType, targetContent.OriginalName);
-        } else
+            var targetContentLoadResult = content.Target();
+            if (!targetContentLoadResult.Success)
+            {
+                throw new PluginMisconfigurationException(
+                    loadResult.Error ?? "An unknown error occured while parsing the content");
+            }
+            
+            var targetContent = targetContentLoadResult.Value;
+            result.File = await fileManagementClient.UploadAsync(targetContent.ToStream(), targetContent.OriginalMediaType, targetContent.OriginalName);
+        } 
+        else
         {
-            result.File = await fileManagementClient.UploadAsync(content.Serialize().ToStream(), MediaTypes.Xliff, content.XliffFileName);
+            result.File = await fileManagementClient.UploadAsync(
+                content.Serialize().ToStream(), 
+                MediaTypes.Xliff2, 
+                input.File.Name);
         }
 
         return result;
@@ -181,14 +205,26 @@ public class TranslationActions(InvocationContext invocationContext, IFileManage
     {
         var model = input.AIModel;
         var stream = await fileManagementClient.DownloadAsync(input.File);
-        var content = await Transformation.Parse(stream, input.File.Name);
+        var contentLoadResult = Transformation.Load(stream, input.File.Name);
+        if (!contentLoadResult.Success)
+            throw new PluginMisconfigurationException(contentLoadResult.Error);
+
+        var content = contentLoadResult.Value;
         content.SourceLanguage ??= input.SourceLanguage;
         content.TargetLanguage ??= input.TargetLanguage;
         if (content.TargetLanguage == null) 
             throw new PluginMisconfigurationException(
                 "The target language is not defined yet. Please assign the target language in this action.");
 
-        content.SourceLanguage ??= await IdentifySourceLanguage(promptRequest, model, content.Source().GetPlaintext());
+        var plainTextLoadResult = content.Source();
+        if (!plainTextLoadResult.Success)
+        {
+            throw new PluginMisconfigurationException(
+                plainTextLoadResult.Error ?? "An unknown error occured while parsing the content");
+        }
+
+        var plainText = plainTextLoadResult.Value.GetPlaintext();
+        content.SourceLanguage ??= await IdentifySourceLanguage(promptRequest, model, plainText);
 
         var segmentList = content.GetUnits().SelectMany(x => x.Segments).GetSegmentsForTranslation().ToList();
 
@@ -251,7 +287,10 @@ public class TranslationActions(InvocationContext invocationContext, IFileManage
         return new StartBatchResponse
         {
             JobName = job.Name,
-            TransformationFile = await fileManagementClient.UploadAsync(content.Serialize().ToStream(), MediaTypes.Xliff, content.XliffFileName)
+            TransformationFile = await fileManagementClient.UploadAsync(
+                content.Serialize().ToStream(),
+                MediaTypes.Xliff2, 
+                input.File.Name)
         };
     }
 

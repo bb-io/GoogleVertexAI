@@ -62,7 +62,11 @@ public class BatchActions(InvocationContext invocationContext, IFileManagementCl
             throw new PluginApplicationException("No JSONL outputs found in batch destination.");
 
         var stream = await fileManagementClient.DownloadAsync(originalXliff.OriginalXliff);
-        var transformation = await Transformation.Parse(stream, originalXliff.OriginalXliff.Name);
+        var loadResult = Transformation.Load(stream, originalXliff.OriginalXliff.Name);
+        if (!loadResult.Success)
+            throw new PluginMisconfigurationException(loadResult.Error);
+
+        var transformation = loadResult.Value;
         var backgroundType = transformation.MetaData.FirstOrDefault(x => x.Type == "background-type")?.Value;
         
         var units = transformation.GetUnits().ToList();
@@ -188,8 +192,8 @@ public class BatchActions(InvocationContext invocationContext, IFileManagementCl
 
         var outFile = await fileManagementClient.UploadAsync(
             transformation.Serialize().ToStream(), 
-            MediaTypes.Xliff, 
-            transformation.XliffFileName);
+            MediaTypes.Xliff2, 
+            originalXliff.OriginalXliff.Name);
         
         return new BatchFileResponse 
         { 

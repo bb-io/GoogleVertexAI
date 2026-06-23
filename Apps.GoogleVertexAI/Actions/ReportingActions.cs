@@ -7,11 +7,9 @@ using Blackbird.Applications.Sdk.Common;
 using Blackbird.Applications.Sdk.Common.Actions;
 using Blackbird.Applications.Sdk.Common.Exceptions;
 using Blackbird.Applications.Sdk.Common.Invocation;
-using Blackbird.Applications.Sdk.Glossaries.Utils.Dtos;
 using Blackbird.Applications.SDK.Extensions.FileManagement.Interfaces;
 using Blackbird.Filters.Enums;
 using Blackbird.Filters.Transformations;
-using Google.Cloud.AIPlatform.V1;
 using Newtonsoft.Json;
 using System.Text;
 using System.Text.Json;
@@ -26,7 +24,6 @@ public class ReportingActions(InvocationContext invocationContext, IFileManageme
     {
         var sourceLanguage = input.SourceLanguage ?? content.SourceLanguage;
         var targetLanguage = input.TargetLanguage ?? content.TargetLanguage;
-        var allTranslationIssues = new List<XliffIssueDto>();
         var systemPrompt = String.IsNullOrEmpty(customSystemPrompt) ? "Perform an LQA analysis and use the MQM error typology format using all 7 dimensions. " +
                            "Here is a brief description of the seven high-level error type dimensions: " +
                            "1. Terminology – errors arising when a term does not conform to normative domain or organizational terminology standards or when a term in the target text is not the correct, normative equivalent of the corresponding term in the source text. " +
@@ -86,7 +83,11 @@ public class ReportingActions(InvocationContext invocationContext, IFileManageme
         [ActionParameter][Display("System prompt (fully replaces MQM instructions)")] string? customSystemPrompt)
     {
         var stream = await fileManagementClient.DownloadAsync(input.File);
-        var content = await stream.ParseTransformationWithErrorHandling(input.File.Name);
+        var loadResult = Transformation.Load(stream, input.File.Name);
+        if (!loadResult.Success)
+            throw new PluginMisconfigurationException(loadResult.Error);
+
+        var content = loadResult.Value;
         var model = input.AIModel;
 
         var (userPrompt, systemPrompt) = await CreatePrompts(input, customSystemPrompt, glossary, additionalPrompt, content);
@@ -120,7 +121,11 @@ public class ReportingActions(InvocationContext invocationContext, IFileManageme
     [ActionParameter][Display("System prompt (fully replaces MQM instructions)")] string? customSystemPrompt)
     {
         var stream = await fileManagementClient.DownloadAsync(input.File);
-        var content = await Transformation.Parse(stream, input.File.Name);
+        var loadResult = Transformation.Load(stream, input.File.Name);
+        if (!loadResult.Success)
+            throw new PluginMisconfigurationException(loadResult.Error);
+
+        var content = loadResult.Value;
 
         var (userPrompt, systemPrompt) = await CreatePrompts(input, customSystemPrompt, glossary, additionalPrompt, content);
 

@@ -5,7 +5,6 @@ using Apps.GoogleVertexAI.Polling.Model;
 using Blackbird.Applications.Sdk.Common.Files;
 using Blackbird.Applications.Sdk.Common.Polling;
 using Blackbird.Filters.Enums;
-using Blackbird.Filters.Extensions;
 using Blackbird.Filters.Transformations;
 using GoogleVertexAI.Base;
 using Newtonsoft.Json;
@@ -197,7 +196,9 @@ public class EditActionTests : TestBase
         var projectDirectory = Directory.GetParent(baseDirectory)!.Parent!.Parent!.Parent!.FullName;
         var path = Path.Combine(projectDirectory, "TestFiles", "Output", file.Name);
         await using var stream = File.OpenRead(path);
-        return await Transformation.Parse(stream, file.Name);
+        
+        var loadResult = Transformation.Load(stream, file.Name);
+        return loadResult.Success ? loadResult.Value : throw new Exception(loadResult.Error);
     }
 
     private static int CountGraphemes(string? value)
