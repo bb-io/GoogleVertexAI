@@ -17,6 +17,7 @@ using Google.Cloud.AIPlatform.V1;
 using Newtonsoft.Json.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using Apps.GoogleVertexAI.Extensions;
 using Newtonsoft.Json;
 
 namespace Apps.GoogleVertexAI.Actions;
@@ -193,7 +194,7 @@ public class BatchActions(InvocationContext invocationContext, IFileManagementCl
         var outFile = await fileManagementClient.UploadAsync(
             transformation.Serialize().ToStream(), 
             MediaTypes.Xliff2, 
-            originalXliff.OriginalXliff.Name);
+            originalXliff.OriginalXliff.Name.ToXliffFileName());
         
         return new BatchFileResponse 
         { 

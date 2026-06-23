@@ -14,6 +14,7 @@ using Blackbird.Filters.Transformations;
 using Newtonsoft.Json;
 using System.Text;
 using Apps.GoogleVertexAI.Constants;
+using Apps.GoogleVertexAI.Extensions;
 using Apps.GoogleVertexAI.Models.Dto;
 using Apps.GoogleVertexAI.Utils;
 using Blackbird.Filters.Extensions;
@@ -53,7 +54,11 @@ public class TranslationActions(InvocationContext invocationContext, IFileManage
         var content = loadResult.Value;
         content.SourceLanguage ??= input.SourceLanguage;
         content.TargetLanguage ??= input.TargetLanguage;
-        if (content.TargetLanguage == null) throw new PluginMisconfigurationException("The target language is not defined yet. Please assign the target language in this action.");
+        if (content.TargetLanguage == null)
+        {
+            throw new PluginMisconfigurationException(
+                "The target language is not defined yet. Please assign the target language in this action.");
+        }
 
         if (content.SourceLanguage == null)
         {
@@ -189,7 +194,7 @@ public class TranslationActions(InvocationContext invocationContext, IFileManage
             result.File = await fileManagementClient.UploadAsync(
                 content.Serialize().ToStream(), 
                 MediaTypes.Xliff2, 
-                input.File.Name);
+                input.File.Name.ToXliffFileName());
         }
 
         return result;
@@ -290,7 +295,7 @@ public class TranslationActions(InvocationContext invocationContext, IFileManage
             TransformationFile = await fileManagementClient.UploadAsync(
                 content.Serialize().ToStream(),
                 MediaTypes.Xliff2, 
-                input.File.Name)
+                input.File.Name.ToXliffFileName())
         };
     }
 

@@ -15,6 +15,7 @@ using Blackbird.Filters.Transformations;
 using Newtonsoft.Json;
 using System.Text;
 using Apps.GoogleVertexAI.Constants;
+using Apps.GoogleVertexAI.Extensions;
 using Apps.GoogleVertexAI.Models.Dto;
 using Blackbird.Applications.Sdk.Common.Exceptions;
 
@@ -248,7 +249,7 @@ public class EditActions(InvocationContext invocationContext, IFileManagementCli
         var file = await fileManagementClient.UploadAsync(
             content.Serialize().ToStream(),
             MediaTypes.Xliff2,
-            input.File.Name);
+            input.File.Name.ToXliffFileName());
 
         return new ShortenContentResponse
         {
@@ -426,7 +427,7 @@ public class EditActions(InvocationContext invocationContext, IFileManagementCli
             result.File = await fileManagementClient.UploadAsync(
                 content.Serialize().ToStream(), 
                 MediaTypes.Xliff2, 
-                input.File.Name);
+                input.File.Name.ToXliffFileName());
         }
 
         result.ErrorMessages = errorMessages;
@@ -514,7 +515,7 @@ public class EditActions(InvocationContext invocationContext, IFileManagementCli
         var file = await fileManagementClient.UploadAsync(
             content.Serialize().ToStream(),
             MediaTypes.Xliff2,
-            input.File.Name);
+            input.File.Name.ToXliffFileName());
 
         return new StartBatchResponse
         {

@@ -13,7 +13,6 @@ using Blackbird.Filters.Transformations;
 using Newtonsoft.Json;
 using System.Text;
 using System.Text.Json;
-using Apps.GoogleVertexAI.Utils;
 
 namespace Apps.GoogleVertexAI.Actions;
 

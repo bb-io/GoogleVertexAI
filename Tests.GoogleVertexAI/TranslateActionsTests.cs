@@ -15,15 +15,15 @@ public class TranslateActionsTests : TestBase
     private const string ModelName = "gemini-3-pro-preview";
 
     [TestMethod]
-    public async Task Translate_WithHtmlContent_IsSuccess()
+    public async Task TranslateContent_IsSuccess()
     {
         // Arrange
         var actions = new TranslationActions(InvocationContext, FileManager);
         var translateRequest = new TranslateFileRequest
         {
-            File = new FileReference { Name = "contentful.html" },
-            TargetLanguage = "ja-jp",
-            AIModel = "gemini-2.5-flash-lite",
+            File = new FileReference { Name = "test.pptx" },
+            TargetLanguage = "uk-ua",
+            AIModel = "gemini-3.5-flash",
             OutputFileHandling = "original",
         };
         string systemMessage = "";
