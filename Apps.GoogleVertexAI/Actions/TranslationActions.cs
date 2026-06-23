@@ -64,10 +64,7 @@ public class TranslationActions(InvocationContext invocationContext, IFileManage
         {
             var sourceLoadResult = content.Source();
             if (!sourceLoadResult.Success)
-            {
-                throw new PluginMisconfigurationException(
-                    loadResult.Error ?? "An unknown error occured while parsing the content");
-            }
+                throw new PluginMisconfigurationException(sourceLoadResult.Error);
 
             var source = sourceLoadResult.Value;
             content.SourceLanguage = await IdentifySourceLanguage(promptRequest, model, source.GetPlaintext());
@@ -181,10 +178,7 @@ public class TranslationActions(InvocationContext invocationContext, IFileManage
         {
             var targetContentLoadResult = content.Target();
             if (!targetContentLoadResult.Success)
-            {
-                throw new PluginMisconfigurationException(
-                    loadResult.Error ?? "An unknown error occured while parsing the content");
-            }
+                throw new PluginMisconfigurationException(targetContentLoadResult.Error);
             
             var targetContent = targetContentLoadResult.Value;
             result.File = await fileManagementClient.UploadAsync(targetContent.ToStream(), targetContent.OriginalMediaType, targetContent.OriginalName);

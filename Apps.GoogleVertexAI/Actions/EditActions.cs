@@ -410,10 +410,7 @@ public class EditActions(InvocationContext invocationContext, IFileManagementCli
         {
             var targetContentLoadResult = content.Target();
             if (!targetContentLoadResult.Success)
-            {
-                throw new PluginMisconfigurationException(
-                    loadResult.Error ?? "An unknown error occured while parsing the content");
-            }
+                throw new PluginMisconfigurationException(targetContentLoadResult.Error);
 
             var targetContent = targetContentLoadResult.Value;
             
