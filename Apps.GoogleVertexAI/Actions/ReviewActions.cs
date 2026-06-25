@@ -28,16 +28,11 @@ public class ReviewActions(InvocationContext invocationContext, IFileManagementC
         [ActionParameter, Display("Bucket size", Description = "Specify the number of translation units to be processed at once. Default value: 1500. (See our documentation for an explanation)")] int? bucketSize = 1500)
     {
         var fileStream = await fileManagementClient.DownloadAsync(input.File);
-        Transformation transformation; 
-        
-        try
-        {
-            transformation = await Transformation.Parse(fileStream, input.File.Name);
-        }
-        catch (Exception)
-        {
-            throw new PluginApplicationException("The provided file is not supported. XLIFF, HTML and plain text files are supported at the moment.");
-        }
+        var loadResult = Transformation.Load(fileStream, input.File.Name);
+        if (!loadResult.Success)
+            throw new PluginMisconfigurationException(loadResult.Error);
+
+        var transformation = loadResult.Value;
 
         var statesToEstimate = input
             .EstimateUnitsWhereAllSegmentStates?

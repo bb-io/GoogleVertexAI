@@ -15,6 +15,7 @@ using Blackbird.Filters.Transformations;
 using Newtonsoft.Json;
 using System.Text;
 using Apps.GoogleVertexAI.Constants;
+using Apps.GoogleVertexAI.Extensions;
 using Apps.GoogleVertexAI.Models.Dto;
 using Blackbird.Applications.Sdk.Common.Exceptions;
 
@@ -57,7 +58,11 @@ public class EditActions(InvocationContext invocationContext, IFileManagementCli
         }
 
         var stream = await fileManagementClient.DownloadAsync(input.File);
-        var content = await Transformation.Parse(stream, input.File.Name);
+        var loadResult = Transformation.Load(stream, input.File.Name);
+        if (!loadResult.Success)
+            throw new PluginMisconfigurationException(loadResult.Error);
+
+        var content = loadResult.Value;
         var systemPrompt = string.IsNullOrWhiteSpace(customSystemPrompt)
             ? defaultSystemPrompt
             : customSystemPrompt;
@@ -243,8 +248,8 @@ public class EditActions(InvocationContext invocationContext, IFileManagementCli
 
         var file = await fileManagementClient.UploadAsync(
             content.Serialize().ToStream(),
-            MediaTypes.Xliff,
-            content.XliffFileName);
+            MediaTypes.Xliff2,
+            input.File.Name.ToXliffFileName());
 
         return new ShortenContentResponse
         {
@@ -278,7 +283,11 @@ public class EditActions(InvocationContext invocationContext, IFileManagementCli
         var model = input.AIModel;
         var result = new FileEditResponse();
         var stream = await fileManagementClient.DownloadAsync(input.File);
-        var content = await Transformation.Parse(stream, input.File.Name);
+        
+        var loadResult = Transformation.Load(stream, input.File.Name);
+        if (!loadResult.Success)
+            throw new PluginMisconfigurationException(loadResult.Error);
+        var content = loadResult.Value;
 
         var counter = 1;        
         var errorMessages = new List<string>();
@@ -399,9 +408,14 @@ public class EditActions(InvocationContext invocationContext, IFileManagementCli
 
         if (input.OutputFileHandling == "original")
         {
-            var targetContent = content.Target();
+            var targetContentLoadResult = content.Target();
+            if (!targetContentLoadResult.Success)
+                throw new PluginMisconfigurationException(targetContentLoadResult.Error);
+
+            var targetContent = targetContentLoadResult.Value;
+            
             result.File = await fileManagementClient.UploadAsync(
-                targetContent.Serialize().ToStream(), 
+                targetContent.ToStream(), 
                 targetContent.OriginalMediaType, 
                 targetContent.OriginalName);
         } 
@@ -409,8 +423,8 @@ public class EditActions(InvocationContext invocationContext, IFileManagementCli
         {
             result.File = await fileManagementClient.UploadAsync(
                 content.Serialize().ToStream(), 
-                MediaTypes.Xliff, 
-                content.XliffFileName);
+                MediaTypes.Xliff2, 
+                input.File.Name.ToXliffFileName());
         }
 
         result.ErrorMessages = errorMessages;
@@ -427,8 +441,11 @@ public class EditActions(InvocationContext invocationContext, IFileManagementCli
         [ActionParameter] BucketRequest bucketRequest)
     {
         var stream = await fileManagementClient.DownloadAsync(input.File);
-        var content = await Transformation.Parse(stream, input.File.Name);
+        var loadResult = Transformation.Load(stream, input.File.Name);
+        if (!loadResult.Success)
+            throw new PluginMisconfigurationException(loadResult.Error);
 
+        var content = loadResult.Value;
         var segmentList = content.GetUnits().SelectMany(x => x.Segments).GetSegmentsForEditing().ToList();
 
         var glossaryStructure = await GlossaryHelper.ParseGlossary(fileManagementClient, glossary?.Glossary);
@@ -494,8 +511,8 @@ public class EditActions(InvocationContext invocationContext, IFileManagementCli
         
         var file = await fileManagementClient.UploadAsync(
             content.Serialize().ToStream(),
-            MediaTypes.Xliff,
-            content.XliffFileName);
+            MediaTypes.Xliff2,
+            input.File.Name.ToXliffFileName());
 
         return new StartBatchResponse
         {

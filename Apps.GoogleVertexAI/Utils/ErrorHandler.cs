@@ -40,16 +40,4 @@ public static class ErrorHandler
             throw new PluginApplicationException(ex.Message);
         }
     }
-    
-    public static async Task<Transformation> ParseTransformationWithErrorHandling(this Stream stream, string fileName)
-    {
-        try
-        {
-            return await Transformation.Parse(stream, fileName);
-        }
-        catch (Exception ex) when(ex.Message.Contains("Unsupported XLIFF version", StringComparison.OrdinalIgnoreCase))
-        {
-            throw new PluginMisconfigurationException(ex.Message);
-        }
-    }
 }
