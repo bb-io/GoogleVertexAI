@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 namespace Apps.GoogleVertexAI.Helpers;
 
 public static class XmlHelpers
@@ -7,10 +9,9 @@ public static class XmlHelpers
         if (string.IsNullOrEmpty(content) || IsWellFormedFragment(content))
             return content;
 
-        return content
-            .Replace("&", "&amp;")
-            .Replace("<", "&lt;")
-            .Replace(">", "&gt;");
+        content = Regex.Replace(content, @"&(?!#\d+;|#x[0-9a-fA-F]+;|[A-Za-z][A-Za-z0-9]*;)", "&amp;");
+        content = Regex.Replace(content, "<(?![A-Za-z_/!?])", "&lt;");
+        return content;
     }
 
     private static bool IsWellFormedFragment(string content)
