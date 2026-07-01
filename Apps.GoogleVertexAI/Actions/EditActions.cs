@@ -225,7 +225,7 @@ public class EditActions(InvocationContext invocationContext, IFileManagementCli
                     continue;
                 }
 
-                candidate.Segments[i].SetTarget(target);
+                candidate.Segments[i].SetTarget(XmlHelpers.EnsureXmlSafe(target));
                 changed = true;
             }
 
