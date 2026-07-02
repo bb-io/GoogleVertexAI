@@ -23,10 +23,10 @@ public class EditActionTests : TestBase
     {
         var actions = new EditActions(InvocationContext, FileManager);
 
-        var result = await actions.ShortenContent(
+        var results = await actions.ShortenContent(
             new ShortenContentRequest
             {
-                File = new FileReference { Name = "shorten-content-test.xliff" },
+                Files = [new FileReference { Name = "shorten-content-test.xliff" }],
                 AIModel = ShortenModelName,
                 SegmentStates = [],
                 BatchSize = 1,
@@ -36,29 +36,32 @@ public class EditActionTests : TestBase
             null,
             new PromptRequest { Temperature = 0.2f, MaxOutputTokens = 1000 });
 
-        var output = await ParseOutput(result.File);
-        var shortenedUnit = output.GetUnits().Single(x => x.Id == "translated-over-limit");
-        var reviewedUnit = output.GetUnits().Single(x => x.Id == "reviewed-over-limit");
-        var underLimitUnit = output.GetUnits().Single(x => x.Id == "translated-under-limit");
-        var noRestrictionUnit = output.GetUnits().Single(x => x.Id == "no-restriction");
-        var shortenedTarget = shortenedUnit.Segments.Single().GetTarget();
+        foreach (var result in results.Results)
+        {
+            var output = await ParseOutput(result.File);
+            var shortenedUnit = output.GetUnits().Single(x => x.Id == "translated-over-limit");
+            var reviewedUnit = output.GetUnits().Single(x => x.Id == "reviewed-over-limit");
+            var underLimitUnit = output.GetUnits().Single(x => x.Id == "translated-under-limit");
+            var noRestrictionUnit = output.GetUnits().Single(x => x.Id == "no-restriction");
+            var shortenedTarget = shortenedUnit.Segments.Single().GetTarget();
 
-        Assert.AreEqual(4, result.TotalUnitsCount);
-        Assert.AreEqual(3, result.UnitsWithRestrictionCount);
-        Assert.AreEqual(2, result.UnitsMatchedFilterCount);
-        Assert.AreEqual(1, result.UnitsOverLimitCount);
-        Assert.AreEqual(1, result.UnitsUpdatedCount);
-        Assert.AreEqual(0, result.UnitsRemainingOverLimitCount);
-        Assert.IsTrue(result.ProcessedBatchesCount >= 1);
-        Assert.IsTrue(result.Usage.TotalTokens > 0);
-        Assert.IsTrue(CountGraphemes(shortenedTarget) <= 10, $"Target `{shortenedTarget}` exceeds 10 graphemes.");
-        Assert.AreEqual(SegmentState.Translated, shortenedUnit.Segments.Single().State);
-        Assert.AreEqual("This reviewed target is long", reviewedUnit.Segments.Single().GetTarget());
-        Assert.AreEqual(SegmentState.Reviewed, reviewedUnit.Segments.Single().State);
-        Assert.AreEqual("Short target", underLimitUnit.Segments.Single().GetTarget());
-        Assert.AreEqual("This target has no restriction", noRestrictionUnit.Segments.Single().GetTarget());
-        Assert.IsTrue(result.PromptTemplate.Contains("{sourceLanguage}"));
-        Assert.IsFalse(result.ErrorMessages?.Any() ?? false, string.Join(Environment.NewLine, result.ErrorMessages ?? []));
+            Assert.AreEqual(4, result.TotalUnitsCount);
+            Assert.AreEqual(3, result.UnitsWithRestrictionCount);
+            Assert.AreEqual(2, result.UnitsMatchedFilterCount);
+            Assert.AreEqual(1, result.UnitsOverLimitCount);
+            Assert.AreEqual(1, result.UnitsUpdatedCount);
+            Assert.AreEqual(0, result.UnitsRemainingOverLimitCount);
+            Assert.IsTrue(result.ProcessedBatchesCount >= 1);
+            Assert.IsTrue(result.Usage.TotalTokens > 0);
+            Assert.IsTrue(CountGraphemes(shortenedTarget) <= 10, $"Target `{shortenedTarget}` exceeds 10 graphemes.");
+            Assert.AreEqual(SegmentState.Translated, shortenedUnit.Segments.Single().State);
+            Assert.AreEqual("This reviewed target is long", reviewedUnit.Segments.Single().GetTarget());
+            Assert.AreEqual(SegmentState.Reviewed, reviewedUnit.Segments.Single().State);
+            Assert.AreEqual("Short target", underLimitUnit.Segments.Single().GetTarget());
+            Assert.AreEqual("This target has no restriction", noRestrictionUnit.Segments.Single().GetTarget());
+            Assert.IsTrue(result.PromptTemplate.Contains("{sourceLanguage}"));
+            Assert.IsFalse(result.ErrorMessages?.Any() ?? false, string.Join(Environment.NewLine, result.ErrorMessages ?? [])); 
+        }
     }
 
     [TestMethod]
@@ -66,10 +69,10 @@ public class EditActionTests : TestBase
     {
         var actions = new EditActions(InvocationContext, FileManager);
 
-        var result = await actions.ShortenContent(
+        var results = await actions.ShortenContent(
             new ShortenContentRequest
             {
-                File = new FileReference { Name = "Home page with character limits_en-US-en_us-de-T.xliff" },
+                Files = [new FileReference { Name = "Home page with character limits_en-US-en_us-de-T.xliff" }],
                 AIModel = ShortenModelName,
                 BatchSize = 1,
                 RetryCount = 3,
@@ -78,23 +81,26 @@ public class EditActionTests : TestBase
             null,
             new PromptRequest { Temperature = 0.0f, MaxOutputTokens = 1000 });
 
-        var output = await ParseOutput(result.File);
-        var translatedRestrictedUnit = output.GetUnits().Single(x => x.Id == "vQl02fa2sN2aX16G1_dc10:1");
-        var initialRestrictedUnit = output.GetUnits().Single(x => x.Id == "vQl02fa2sN2aX16G1_dc10:0");
-        var shortenedTarget = translatedRestrictedUnit.Segments.Single().GetTarget();
+        foreach (var result in results.Results)
+        {
+            var output = await ParseOutput(result.File);
+            var translatedRestrictedUnit = output.GetUnits().Single(x => x.Id == "vQl02fa2sN2aX16G1_dc10:1");
+            var initialRestrictedUnit = output.GetUnits().Single(x => x.Id == "vQl02fa2sN2aX16G1_dc10:0");
+            var shortenedTarget = translatedRestrictedUnit.Segments.Single().GetTarget();
 
-        Assert.AreEqual(6, result.TotalUnitsCount);
-        Assert.AreEqual(2, result.UnitsWithRestrictionCount);
-        Assert.AreEqual(2, result.UnitsMatchedFilterCount);
-        Assert.AreEqual(1, result.UnitsOverLimitCount);
-        Assert.AreEqual(1, result.UnitsUpdatedCount);
-        Assert.AreEqual(0, result.UnitsRemainingOverLimitCount);
-        Assert.IsTrue(result.ProcessedBatchesCount >= 1);
-        Assert.IsTrue(result.Usage.TotalTokens > 0);
-        Assert.IsTrue(CountGraphemes(shortenedTarget) <= 150, $"Target `{shortenedTarget}` exceeds 150 graphemes.");
-        Assert.AreEqual(SegmentState.Translated, translatedRestrictedUnit.Segments.Single().State);
-        Assert.AreEqual(SegmentState.Initial, initialRestrictedUnit.Segments.Single().State);
-        Assert.IsFalse(result.ErrorMessages?.Any() ?? false, string.Join(Environment.NewLine, result.ErrorMessages ?? []));
+            Assert.AreEqual(6, result.TotalUnitsCount);
+            Assert.AreEqual(2, result.UnitsWithRestrictionCount);
+            Assert.AreEqual(2, result.UnitsMatchedFilterCount);
+            Assert.AreEqual(1, result.UnitsOverLimitCount);
+            Assert.AreEqual(1, result.UnitsUpdatedCount);
+            Assert.AreEqual(0, result.UnitsRemainingOverLimitCount);
+            Assert.IsTrue(result.ProcessedBatchesCount >= 1);
+            Assert.IsTrue(result.Usage.TotalTokens > 0);
+            Assert.IsTrue(CountGraphemes(shortenedTarget) <= 150, $"Target `{shortenedTarget}` exceeds 150 graphemes.");
+            Assert.AreEqual(SegmentState.Translated, translatedRestrictedUnit.Segments.Single().State);
+            Assert.AreEqual(SegmentState.Initial, initialRestrictedUnit.Segments.Single().State);
+            Assert.IsFalse(result.ErrorMessages?.Any() ?? false, string.Join(Environment.NewLine, result.ErrorMessages ?? []));
+        }
     }
 
     [TestMethod]

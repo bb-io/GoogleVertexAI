@@ -9,7 +9,8 @@ namespace Apps.GoogleVertexAI.Models.Requests;
 
 public class ShortenContentRequest
 {
-    public FileReference File { get; set; } = new();
+    [Display("Files")]
+    public IEnumerable<FileReference> Files { get; set; } = [];
 
     [DataSource(typeof(AIModelDynamicDataSourceHandler))]
     [Display("Model")]

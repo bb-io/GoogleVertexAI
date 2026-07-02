@@ -32,241 +32,54 @@ public class EditActions(InvocationContext invocationContext, IFileManagementCli
         [ActionParameter, Display("System prompt (fully replaces shortening instructions)")] string? customSystemPrompt,
         [ActionParameter] PromptRequest promptRequest)
     {
-        const int defaultBatchSize = 1500;
-        const int defaultRetryCount = 3;
-        const string defaultSystemPrompt =
-            "You are a linguistic expert. Shorten translated target text so the full target for each unit fits the supplied maximum grapheme count. " +
-            "Preserve meaning, formality, style, locale conventions, and all inline placeholders or tags. " +
-            "Return only the structured JSON output requested by the schema.";
-        const string promptTemplate =
-            "Shorten target text for each unit from {sourceLanguage} into {targetLanguage}. " +
-            "For every unit, return exactly one object with the same id and the same number of target segments. " +
-            "The concatenated target segments for each unit must be no longer than maxGraphemes Unicode graphemes. " +
-            "Keep segment order. Preserve inline placeholders and tags exactly. Additional instructions: {additionalInstructions}. " +
-            "Units JSON shape: [{ id, maxGraphemes, sourceSegments, targetSegments }].";
-
-        var batchSize = input.BatchSize.GetValueOrDefault(defaultBatchSize);
-        if (batchSize <= 0)
-        {
+        var files = input.Files.ToList();
+        
+        var settings = ShortenSettings.Build(input, additionalInstructions, customSystemPrompt);
+        if (settings.BatchSize <= 0)
             throw new PluginApplicationException("Batch size must be greater than zero.");
-        }
-
-        var retryCount = input.RetryCount.GetValueOrDefault(defaultRetryCount);
-        if (retryCount < 0)
-        {
+        if (settings.RetryCount < 0)
             throw new PluginApplicationException("Retries must be zero or greater.");
-        }
-
-        var stream = await fileManagementClient.DownloadAsync(input.File);
-        var loadResult = Transformation.Load(stream, input.File.Name);
-        if (!loadResult.Success)
-            throw new PluginMisconfigurationException(loadResult.Error);
-
-        var content = loadResult.Value;
-        var systemPrompt = string.IsNullOrWhiteSpace(customSystemPrompt)
-            ? defaultSystemPrompt
-            : customSystemPrompt;
-
-        var selectedStates = input.SegmentStates?
-            .Select(SegmentStateHelper.ToSegmentState)
-            .Where(state => state != null)
-            .Select(state => state!.Value)
-            .ToHashSet();
-        IReadOnlySet<SegmentState> statesToProcess = selectedStates is { Count: > 0 }
-            ? selectedStates
-            : new HashSet<SegmentState> { SegmentState.Initial, SegmentState.Translated };
-
-        var errorMessages = new List<string>();
-        var usage = new UsageDto();
-        var units = content.GetUnits().ToList();
-        var unitsWithRestrictions = units
-            .Select(unit => new
+        
+        var results = new ShortenResultDto[files.Count];
+        
+        await Parallel.ForEachAsync(
+            Enumerable.Range(0, files.Count),
+            new ParallelOptions { MaxDegreeOfParallelism = 5 },
+            async (i, _) =>
             {
-                Unit = unit,
-                MaximumGraphemes = unit.SizeRestrictions?.MaximumSize
-            })
-            .Where(x => x.MaximumGraphemes is > 0)
-            .ToList();
-        var unitsMatchingFilter = unitsWithRestrictions
-            .Where(x =>
-            {
-                var segments = x.Unit.Segments.Where(segment => !segment.IsIgnorbale).ToList();
-                return segments.Count > 0
-                    && segments.All(segment => statesToProcess.Contains(segment.State ?? SegmentState.Initial));
-            })
-            .ToList();
-        var candidates = unitsMatchingFilter
-            .Select((x, index) => new ShortenCandidate(index, x.Unit, x.MaximumGraphemes!.Value))
-            .Where(x => x.CurrentGraphemeCount > x.MaximumGraphemes)
-            .ToList();
-
-        var pending = candidates.ToList();
-        var processedBatchesCount = 0;
-        var retryAttemptsCount = 0;
-
-        for (var attempt = 0; attempt <= retryCount && pending.Count > 0; attempt++)
-        {
-            if (attempt > 0)
-            {
-                retryAttemptsCount++;
-            }
-
-            var nextPending = new List<ShortenCandidate>();
-            for (var i = 0; i < pending.Count; i += batchSize)
-            {
-                var batch = pending.Skip(i).Take(batchSize).ToList();
-                processedBatchesCount++;
-
-                var inputObjects = batch.Select(x => new
-                {
-                    id = x.Id,
-                    maxGraphemes = x.MaximumGraphemes,
-                    sourceSegments = x.Segments.Select(segment => segment.GetSource()).ToArray(),
-                    targetSegments = x.WorkingTargets.ToArray()
-                });
-                var promptBuilder = new StringBuilder();
-                promptBuilder.AppendLine(
-                    $"Shorten target text for each unit from {content.SourceLanguage ?? "the source language"} into {content.TargetLanguage ?? "the target language"}. " +
-                    "For every unit, return exactly one object with the same id and the same number of target segments. " +
-                    "The concatenated target segments for each unit must be no longer than maxGraphemes Unicode graphemes. " +
-                    "Keep segment order. Preserve inline placeholders and tags exactly.");
-
-                if (!string.IsNullOrWhiteSpace(additionalInstructions))
-                {
-                    promptBuilder.AppendLine($"Additional instructions: {additionalInstructions}");
-                }
-
-                if (attempt > 0)
-                {
-                    promptBuilder.AppendLine("Previous output was still too long for these units. Shorten the provided targetSegments further.");
-                }
-
-                promptBuilder.AppendLine();
-                promptBuilder.AppendLine($"Units: {JsonConvert.SerializeObject(inputObjects)}");
-                var prompt = promptBuilder.ToString();
-
-                ShortenContentResultDto[] results;
+                var file = files[i];
+                
                 try
                 {
-                    var (response, promptUsage) = await ExecuteGeminiPrompt(
+                    var stream = await fileManagementClient.DownloadAsync(file);
+                    var loadResult = Transformation.Load(stream, file.Name);
+                    if (!loadResult.Success)
+                        throw new PluginMisconfigurationException(loadResult.Error);
+                    
+                    var (shortenResult, transformation) = await ShortenHelper.ShortenSingleFile(
+                        loadResult.Value, 
+                        settings, 
                         promptRequest,
-                        input.AIModel,
-                        prompt,
-                        systemPrompt,
-                        ResponseSchemas.IdTargetsArray);
+                        (req, model, prompt, sys, schema) => ExecuteGeminiPrompt(req, model, prompt, sys, schema));
+                    
+                    shortenResult.File = await fileManagementClient.UploadAsync(
+                        transformation.Serialize().ToStream(), MediaTypes.Xliff2, file.Name.ToXliffFileName());
 
-                    usage += promptUsage;
-                    results = JsonConvert.DeserializeObject<ShortenContentResultDto[]>(response) ??
-                        throw new PluginApplicationException("The Gemini API returned an empty or null JSON array.");
+                    results[i] = shortenResult;
                 }
                 catch (Exception ex)
                 {
-                    foreach (var candidate in batch.Where(x => x.CurrentGraphemeCount > x.MaximumGraphemes))
+                    results[i] = new ShortenResultDto
                     {
-                        candidate.LastError =
-                            $"Failed to process shortening batch {processedBatchesCount} on attempt {attempt + 1}: {ex.Message}";
-                        nextPending.Add(candidate);
-                    }
-
-                    continue;
+                        File = file,
+                        SystemPrompt = settings.SystemPrompt,
+                        PromptTemplate = settings.PromptTemplate,
+                        ErrorMessages = [$"Failed to process '{file.Name}': {ex.Message}"]
+                    };
                 }
+            });
 
-                foreach (var duplicateId in results.GroupBy(x => x.Id).Where(x => x.Count() > 1).Select(x => x.Key))
-                {
-                    errorMessages.Add($"Gemini response included duplicate result id {duplicateId}.");
-                }
-
-                var resultsById = results
-                    .GroupBy(x => x.Id)
-                    .ToDictionary(x => x.Key, x => x.First());
-                foreach (var candidate in batch)
-                {
-                    if (!resultsById.TryGetValue(candidate.Id, out var result))
-                    {
-                        candidate.LastError = $"Gemini response did not include unit {candidate.DisplayId}.";
-                        nextPending.Add(candidate);
-                        continue;
-                    }
-
-                    if (result.Targets.Length != candidate.Segments.Count)
-                    {
-                        candidate.LastError =
-                            $"Gemini response for unit {candidate.DisplayId} had {result.Targets.Length} target segments, expected {candidate.Segments.Count}.";
-                        nextPending.Add(candidate);
-                        continue;
-                    }
-
-                    candidate.WorkingTargets = result.Targets.ToList();
-                    if (candidate.CurrentGraphemeCount <= candidate.MaximumGraphemes)
-                    {
-                        candidate.AcceptedTargets = candidate.WorkingTargets.ToList();
-                        candidate.LastError = null;
-                        continue;
-                    }
-
-                    nextPending.Add(candidate);
-                }
-            }
-
-            pending = nextPending
-                .Where(x => x.CurrentGraphemeCount > x.MaximumGraphemes)
-                .ToList();
-        }
-
-        var updatedCount = 0;
-        foreach (var candidate in candidates.Where(x => x.AcceptedTargets is not null))
-        {
-            var changed = false;
-            for (var i = 0; i < candidate.Segments.Count; i++)
-            {
-                var target = candidate.AcceptedTargets![i];
-                if (candidate.Segments[i].GetTarget() == target)
-                {
-                    continue;
-                }
-
-                candidate.Segments[i].SetTarget(XmlHelpers.EnsureXmlSafe(target));
-                changed = true;
-            }
-
-            if (changed)
-            {
-                updatedCount++;
-            }
-        }
-
-        foreach (var candidate in pending)
-        {
-            if (!string.IsNullOrWhiteSpace(candidate.LastError))
-            {
-                errorMessages.Add(candidate.LastError);
-            }
-
-            errorMessages.Add(
-                $"Unit {candidate.DisplayId} remains over the {candidate.MaximumGraphemes} grapheme limit after {retryCount} retries.");
-        }
-
-        var file = await fileManagementClient.UploadAsync(
-            content.Serialize().ToStream(),
-            MediaTypes.Xliff2,
-            input.File.Name.ToXliffFileName());
-
-        return new ShortenContentResponse
-        {
-            File = file,
-            TotalUnitsCount = units.Count,
-            UnitsWithRestrictionCount = unitsWithRestrictions.Count,
-            UnitsMatchedFilterCount = unitsMatchingFilter.Count,
-            UnitsOverLimitCount = candidates.Count,
-            UnitsUpdatedCount = updatedCount,
-            UnitsRemainingOverLimitCount = pending.Count,
-            ProcessedBatchesCount = processedBatchesCount,
-            RetryAttemptsCount = retryAttemptsCount,
-            SystemPrompt = systemPrompt,
-            PromptTemplate = promptTemplate,
-            Usage = usage,
-            ErrorMessages = errorMessages
-        };
+        return new(results);
     }
 
     [BlueprintActionDefinition(BlueprintAction.EditFile)]
