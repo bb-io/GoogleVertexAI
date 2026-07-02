@@ -9,15 +9,24 @@ public record ShortenSettings(
     int RetryCount,
     string SystemPrompt,
     IReadOnlySet<SegmentState> StatesToProcess,
-    string? AdditionalInstructions)
+    string? AdditionalInstructions,
+    string PromptTemplate)
 {
     public const int DefaultBatchSize = 1500;
     public const int DefaultRetryCount = 3;
+    
     public const string DefaultSystemPrompt =
         "You are a linguistic expert. Shorten translated target text so the full target " +
         "for each unit fits the supplied maximum grapheme count. " +
         "Preserve meaning, formality, style, locale conventions, and all inline placeholders or tags. " +
         "Return only the structured JSON output requested by the schema.";
+    
+    public const string DefaultPromptTemplate =
+        "Shorten target text for each unit from {sourceLanguage} into {targetLanguage}. " +
+        "For every unit, return exactly one object with the same id and the same number of target segments. " +
+        "The concatenated target segments for each unit must be no longer than maxGraphemes Unicode graphemes. " +
+        "Keep segment order. Preserve inline placeholders and tags exactly. Additional instructions: {additionalInstructions}. " +
+        "Units JSON shape: [{ id, maxGraphemes, sourceSegments, targetSegments }].";
     
     public static ShortenSettings Build(
         ShortenContentRequest input,
@@ -40,6 +49,7 @@ public record ShortenSettings(
             input.RetryCount.GetValueOrDefault(DefaultRetryCount),
             string.IsNullOrWhiteSpace(customSystemPrompt) ? DefaultSystemPrompt : customSystemPrompt,
             statesToProcess,
-            additionalInstructions);
+            additionalInstructions,
+            DefaultPromptTemplate);
     }
 }
