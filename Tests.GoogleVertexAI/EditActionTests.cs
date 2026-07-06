@@ -104,6 +104,30 @@ public class EditActionTests : TestBase
     }
 
     [TestMethod]
+    public async Task ShortenContent_IsSuccess()
+    {
+        // Arrange
+        var actions = new EditActions(InvocationContext, FileManager);
+        var input = new ShortenContentRequest
+        {
+            AIModel = "gemini-3.5-flash",
+            Files = [new FileReference { Name = "shorten-tags.xliff" }]
+        };
+        string? additionalInstructions = null;
+        string? customSystemPrompt = null;
+        var promptRequest = new PromptRequest
+        {
+            Temperature = 0
+        };
+
+        // Act
+        var result = await actions.ShortenContent(input, additionalInstructions, customSystemPrompt, promptRequest);
+
+        // Assert
+        PrintResult(result);
+    }
+
+    [TestMethod]
     public async Task Edit_xliff()
     {
         var actions = new EditActions(InvocationContext, FileManager);
