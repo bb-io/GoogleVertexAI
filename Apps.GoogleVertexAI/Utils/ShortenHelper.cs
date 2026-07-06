@@ -74,7 +74,8 @@ public static class ShortenHelper
                     $"Shorten target text for each unit from {content.SourceLanguage ?? "the source language"} into {content.TargetLanguage ?? "the target language"}. " +
                     "For every unit, return exactly one object with the same id and the same number of target segments. " +
                     "The concatenated target segments for each unit must be no longer than maxGraphemes Unicode graphemes. " +
-                    "Keep segment order. Preserve inline placeholders and tags exactly.");
+                    "Keep segment order. Preserve inline placeholders and tags exactly. " +
+                    "CRITICAL: Do not modify, simplify or abbreviate any XML tags. For example, if the source contains a complex tag like <ept id=\"1\">&lt;/1&gt;</ept> or <ph id=\"1\"/>, you must output exactly that syntax. Never shorten tags to <1> or similar.");
 
                 if (!string.IsNullOrWhiteSpace(settings.AdditionalInstructions))
                     promptBuilder.AppendLine($"Additional instructions: {settings.AdditionalInstructions}");

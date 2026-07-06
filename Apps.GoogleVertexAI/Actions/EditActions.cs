@@ -63,7 +63,9 @@ public class EditActions(InvocationContext invocationContext, IFileManagementCli
                         (req, model, prompt, sys, schema) => ExecuteGeminiPrompt(req, model, prompt, sys, schema));
                     
                     shortenResult.File = await fileManagementClient.UploadAsync(
-                        transformation.Serialize().ToStream(), MediaTypes.Xliff2, file.Name.ToXliffFileName());
+                        transformation.Serialize().ToStream(), 
+                        MediaTypes.Xliff2, 
+                        file.Name.ToXliffFileName());
 
                     results[i] = shortenResult;
                 }
