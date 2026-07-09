@@ -132,6 +132,25 @@ public static class ShortenHelper
                         nextPending.Add(candidate);
                         continue;
                     }
+                    
+                    var tagsBroken = false;
+                    for (var k = 0; k < candidate.Segments.Count; k++)
+                    {
+                        if (SameTags(candidate.WorkingTargets[k], result.Targets[k])) 
+                            continue;
+                        
+                        tagsBroken = true;
+                        break;
+                    }
+
+                    if (tagsBroken)
+                    {
+                        candidate.LastError =
+                            $"Gemini changed the tags for unit {candidate.DisplayId}. " +
+                            $"Kept the original to avoid broken placeholders.";
+                        nextPending.Add(candidate);
+                        continue;
+                    }
 
                     candidate.WorkingTargets = result.Targets.ToList();
                     if (candidate.CurrentGraphemeCount <= candidate.MaximumGraphemes)
@@ -194,4 +213,16 @@ public static class ShortenHelper
 
         return (shortenResult, content);
     }
+    
+    private static List<string> GetTags(string? text)
+    {
+        var clean = System.Net.WebUtility.HtmlDecode(text ?? "");
+        return System.Text.RegularExpressions.Regex
+            .Matches(clean, @"\{\d+>|<\d+[}>]")
+            .Select(m => m.Value)
+            .OrderBy(x => x)
+            .ToList();
+    }
+
+    private static bool SameTags(string? before, string? after) => GetTags(before).SequenceEqual(GetTags(after));
 }
