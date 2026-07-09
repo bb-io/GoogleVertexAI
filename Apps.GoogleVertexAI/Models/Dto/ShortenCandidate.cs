@@ -1,6 +1,6 @@
-﻿using Blackbird.Filters.Extensions;
-using Blackbird.Filters.Transformations;
+﻿using Blackbird.Filters.Transformations;
 using System.Globalization;
+using Apps.GoogleVertexAI.Extensions;
 
 namespace Apps.GoogleVertexAI.Models.Dto;
 
@@ -14,8 +14,8 @@ public class ShortenCandidate
     public List<string>? AcceptedTargets { get; set; }
     public string? LastError { get; set; }
 
-    public int CurrentGraphemeCount => CountGraphemes(string.Concat(WorkingTargets));
-
+    public int CurrentGraphemeCount => CountGraphemes(string.Concat(WorkingTargets).StripTags());
+    
     public string DisplayId => Unit.Id ?? Id.ToString(CultureInfo.InvariantCulture);
 
     public ShortenCandidate(int id, Unit unit, int maximumGraphemes)
