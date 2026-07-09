@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<xliff xmlns="urn:oasis:names:tc:xliff:document:2.2"
+       xmlns:slr="urn:oasis:names:tc:xliff:sizerestriction:2.0"
+       version="2.2" srcLang="en-us" trgLang="de">
+  <file id="f1">
+    <slr:profiles generalProfile="xliff:codepoints" storageProfile="" />
+    <unit id="u-title" xml:space="preserve" slr:sizeRestriction="22">
+      <segment state="translated">
+        <source>{1&gt;Champion's challenge&lt;1}</source>
+        <target>{1&gt;Champion's challenge&lt;1}</target>
+      </segment>
+    </unit>
+  </file>
+</xliff>

@@ -111,14 +111,11 @@ public class EditActionTests : TestBase
         var input = new ShortenContentRequest
         {
             AIModel = "gemini-3.5-flash",
-            Files = [new FileReference { Name = "shorten-tags.xliff" }]
+            Files = [new FileReference { Name = "tags.xliff" }]
         };
         string? additionalInstructions = null;
         string? customSystemPrompt = null;
-        var promptRequest = new PromptRequest
-        {
-            Temperature = 0
-        };
+        var promptRequest = new PromptRequest { };
 
         // Act
         var result = await actions.ShortenContent(input, additionalInstructions, customSystemPrompt, promptRequest);
