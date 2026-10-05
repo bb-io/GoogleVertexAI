@@ -14,9 +14,8 @@ public static class ClientFactory
         var jsonConfiguration = credentials.Get(CredNames.ServiceAccountConfString).Value;
 
         var apiUrl = region.Equals("global", StringComparison.OrdinalIgnoreCase)
-           || region.Equals("us-central1", StringComparison.OrdinalIgnoreCase)
-             ? "https://aiplatform.googleapis.com"
-             : $"https://{region}-aiplatform.googleapis.com";
+            ? "https://aiplatform.googleapis.com"
+            : $"https://{region}-aiplatform.googleapis.com";
 
         return ErrorHandler.ExecuteWithErrorHandling(() =>
         new PredictionServiceClientBuilder

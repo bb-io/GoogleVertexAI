@@ -20,8 +20,7 @@ public sealed class VertexGenerativeModelClient(
 {
     public async Task ValidateConnectionAsync(CancellationToken cancellationToken)
     {
-        var isUnprefixed = region.Equals("global", StringComparison.OrdinalIgnoreCase)
-                           || region.Equals("us-central1", StringComparison.OrdinalIgnoreCase);
+        var isUnprefixed = region.Equals("global", StringComparison.OrdinalIgnoreCase);
 
         var apiUrl = isUnprefixed
             ? "https://aiplatform.googleapis.com"
@@ -54,9 +53,7 @@ public sealed class VertexGenerativeModelClient(
         IEnumerable<Part>? files = null,
         CancellationToken cancellationToken = default)
     {
-        var endpoint = EndpointName
-            .FromProjectLocationPublisherModel(projectId, region, PublisherIds.Google, modelId)
-            .ToString();
+        var endpoint = BuildModelResourceName(projectId, region, modelId);
 
         var content = new Content
         {
@@ -156,5 +153,23 @@ public sealed class VertexGenerativeModelClient(
         {
             throw new PluginApplicationException($"Error: {exception.Message}");
         }
+    }
+
+    internal static string BuildModelResourceName(string projectId, string region, string modelId)
+    {
+        var normalizedModelId = modelId.Trim();
+
+        if (EndpointName.TryParse(normalizedModelId, out var resourceName))
+        {
+            return resourceName.ToString();
+        }
+
+        var isCustomEndpoint = normalizedModelId.Length > 0 && normalizedModelId.All(char.IsAsciiDigit);
+
+        return isCustomEndpoint
+            ? EndpointName.FromProjectLocationEndpoint(projectId, region, normalizedModelId).ToString()
+            : EndpointName
+                .FromProjectLocationPublisherModel(projectId, region, PublisherIds.Google, normalizedModelId)
+                .ToString();
     }
 }
