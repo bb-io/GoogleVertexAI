@@ -163,14 +163,29 @@ public class GeminiGenerateContentRequest
 
 public class GeminiContent
 {
+    [JsonProperty("role", NullValueHandling = NullValueHandling.Ignore)]
+    public string? Role { get; set; }
+
     [JsonProperty("parts")]
     public List<GeminiPart> Parts { get; set; } = [];
 }
 
 public class GeminiPart
 {
-    [JsonProperty("text")]
+    [JsonProperty("text", NullValueHandling = NullValueHandling.Ignore)]
     public string? Text { get; set; }
+
+    [JsonProperty("inlineData", NullValueHandling = NullValueHandling.Ignore)]
+    public GeminiInlineData? InlineData { get; set; }
+}
+
+public class GeminiInlineData
+{
+    [JsonProperty("mimeType")]
+    public string MimeType { get; set; } = string.Empty;
+
+    [JsonProperty("data")]
+    public string Data { get; set; } = string.Empty;
 }
 
 public class GeminiGenerationConfig
@@ -181,17 +196,29 @@ public class GeminiGenerationConfig
     [JsonProperty("responseMimeType", NullValueHandling = NullValueHandling.Ignore)]
     public string? ResponseMimeType { get; set; }
     
-    [JsonProperty("temperature")]
-    public float Temperature { get; set; }
+    [JsonProperty("temperature", NullValueHandling = NullValueHandling.Ignore)]
+    public float? Temperature { get; set; }
 
-    [JsonProperty("topP")]
-    public float TopP { get; set; }
+    [JsonProperty("topP", NullValueHandling = NullValueHandling.Ignore)]
+    public float? TopP { get; set; }
 
-    [JsonProperty("topK")]
-    public int TopK { get; set; }
+    [JsonProperty("topK", NullValueHandling = NullValueHandling.Ignore)]
+    public int? TopK { get; set; }
 
-    [JsonProperty("maxOutputTokens")]
-    public int MaxOutputTokens { get; set; }
+    [JsonProperty("maxOutputTokens", NullValueHandling = NullValueHandling.Ignore)]
+    public int? MaxOutputTokens { get; set; }
+
+    [JsonProperty("responseModalities", NullValueHandling = NullValueHandling.Ignore)]
+    public List<string>? ResponseModalities { get; set; }
+
+    [JsonProperty("imageConfig", NullValueHandling = NullValueHandling.Ignore)]
+    public GeminiImageConfig? ImageConfig { get; set; }
+}
+
+public class GeminiImageConfig
+{
+    [JsonProperty("aspectRatio", NullValueHandling = NullValueHandling.Ignore)]
+    public string? AspectRatio { get; set; }
 }
 
 public class GeminiTool
@@ -234,6 +261,9 @@ public class GeminiCandidate
 
     [JsonProperty("groundingMetadata")]
     public GeminiGroundingMetadata? GroundingMetadata { get; set; }
+
+    [JsonProperty("finishReason")]
+    public string? FinishReason { get; set; }
 }
 
 public class GeminiGroundingMetadata
