@@ -66,6 +66,11 @@ Before you can connect you need to make sure that:
 - **Chat** Ask a question or give a command to Gemini. The input will be used as a prompt for the model. Also specify store names to search for relevant files to include in the response generation. Generation will be performed with the chosen model.
 - **Chat with files**  similar to the previous action, but with more control over how retrieved file content is included in the prompt. You can specify a custom prompt template and use variables to include retrieved content and the original question in the prompt.
 
+### Images
+
+- **Extract localizable content from image** performs OCR on an image and creates an XLIFF file containing the extracted text and the embedded original image.
+- **Generate localized image variant** uses a translated XLIFF file to replace visible source-language text in the embedded original image and returns the generated localized image.
+
 ### File search
 
 - **Create file search store** creates a Gemini File Search store.

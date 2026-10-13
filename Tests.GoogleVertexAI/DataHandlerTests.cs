@@ -1,5 +1,4 @@
 ﻿using Apps.GoogleVertexAI.DataSourceHandlers;
-using Apps.GoogleVertexAI.DataSourceHandlers;
 using Blackbird.Applications.Sdk.Common.Dynamic;
 using GoogleVertexAI.Base;
 
@@ -24,5 +23,18 @@ public class DataHandlerTests : TestBase
         }
 
         Assert.IsNotNull(result);
+    }
+
+    [TestMethod]
+    public void Image_generation_model_filter_only_accepts_image_models()
+    {
+        Assert.IsTrue(ImageGenerationModelDataSourceHandler.IsSupportedImageGenerationModel(
+            "gemini-2.5-flash-image"));
+        Assert.IsTrue(ImageGenerationModelDataSourceHandler.IsSupportedImageGenerationModel(
+            "gemini-3-pro-image-preview"));
+        Assert.IsFalse(ImageGenerationModelDataSourceHandler.IsSupportedImageGenerationModel(
+            "gemini-2.5-flash"));
+        Assert.IsFalse(ImageGenerationModelDataSourceHandler.IsSupportedImageGenerationModel(
+            "text-embedding-image-model"));
     }
 }
