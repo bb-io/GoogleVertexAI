@@ -8,6 +8,9 @@ public class ImageGenerationModelDataSourceHandler(InvocationContext invocationC
     protected override bool IsSupportedModel(string modelId, bool hideLatestAndRobotics)
         => IsSupportedImageGenerationModel(modelId);
 
+    protected override string GetDeduplicationKey(string modelId, string displayName)
+        => displayName;
+
     internal static bool IsSupportedImageGenerationModel(string modelId)
         => modelId.StartsWith("gemini-", StringComparison.OrdinalIgnoreCase)
            && modelId.Contains("image", StringComparison.OrdinalIgnoreCase)

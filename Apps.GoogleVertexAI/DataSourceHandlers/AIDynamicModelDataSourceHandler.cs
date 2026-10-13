@@ -25,13 +25,22 @@ public class AIModelDynamicDataSourceHandler(InvocationContext invocationContext
         return models
             .Where(x => IsSupportedModel(x.ModelId, shouldHideLatestAndRobotics))
             .Where(x => MatchesSearch(x, context.SearchString))
-            .DistinctBy(x => x.ModelId)
+            .GroupBy(
+                x => GetDeduplicationKey(x.ModelId, x.DisplayName),
+                StringComparer.OrdinalIgnoreCase)
+            .Select(group => group
+                .OrderBy(x => x.ModelId.Length)
+                .ThenByDescending(x => x.ModelId, StringComparer.OrdinalIgnoreCase)
+                .First())
             .OrderByDescending(x => x.ModelId, StringComparer.OrdinalIgnoreCase)
             .Select(x => new DataSourceItem(x.ModelId, x.DisplayName));
     }
 
     protected virtual bool IsSupportedModel(string modelId, bool hideLatestAndRobotics)
         => IsSupportedTextModel(modelId, hideLatestAndRobotics);
+
+    protected virtual string GetDeduplicationKey(string modelId, string displayName)
+        => modelId;
 
     private async Task<List<AIModelDataSourceItem>> GetVertexModelsAsync(
         IGeminiApiClient client,
