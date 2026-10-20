@@ -15,7 +15,7 @@ public class ScoreRequest
     [Display("Target language")]
     public string? TargetLanguage { get; set; }
 
-    [Display("Score threshold", Description = "Scores range from 0 (lowest) to 100 (highest confidence), anything lower than threshlod fails the quality check low confidence.")]
+    [Display("Score threshold", Description = "Scores range from 0 (lowest) to 100 (highest confidence). Segments scoring at or above the threshold get the new segment state; anything lower fails the quality check. Default value: 80.")]
     public double? Threshold { get; set; }
 
     [Display("New segment state", Description = "The target segment state to assign when the threshold condition is met ('review' by default).")]

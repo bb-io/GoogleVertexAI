@@ -137,21 +137,43 @@ public class OfflineActionTests
         Assert.IsTrue(Segments(result.File).All(segment => segment.State == SegmentState.Final));
     }
 
-    // Without a threshold nothing is promoted or counted under it, as before the migration.
+    // Without a threshold the default of 80 applies: 85 is promoted to the default new state (Reviewed).
     [TestMethod]
-    public async Task Score_WithoutThreshold_ChangesNoState()
+    public async Task Score_WithoutThreshold_UsesDefaultOfEighty()
     {
         var file = _files.Add("score.xlf", TwoTranslatedSegments);
 
-        var result = await new ScriptedReviewActions(Context(), _files, ScriptedLlmClient.Scores(0.3)).Score(
+        var result = await new ScriptedReviewActions(Context(), _files, ScriptedLlmClient.Scores(0.85)).Score(
             new AIModelRequest { AIModel = Model },
             new ScoreRequest { File = file },
             null,
             new PromptRequest());
 
-        Assert.AreEqual(30, result.AverageScore, 0.001);
-        Assert.AreEqual(0, result.TotalSegmentsFinalized);
+        Assert.AreEqual(85, result.AverageScore, 0.001);
+        Assert.AreEqual(2, result.TotalSegmentsFinalized);
         Assert.AreEqual(0, result.TotalUnitsUnderThreshhold);
+        Assert.IsTrue(Segments(result.File).All(segment => segment.State == SegmentState.Reviewed));
+    }
+
+    // The client's threshold is what counts: with 90, scores of 85 are neither promoted nor above it.
+    [TestMethod]
+    public async Task Score_ClientThreshold_DecidesPromotionAndUnderThreshold()
+    {
+        var file = _files.Add("score.xlf", TwoTranslatedSegments);
+
+        var result = await new ScriptedReviewActions(Context(), _files, ScriptedLlmClient.Scores(0.85)).Score(
+            new AIModelRequest { AIModel = Model },
+            new ScoreRequest { File = file, Threshold = 90 },
+            null,
+            new PromptRequest());
+
+        var scoreThresholds = LoadXliff(_files.Read(result.File), result.File.Name).GetUnits()
+            .Select(unit => unit.Quality.ScoreThreshold)
+            .ToList();
+        Assert.AreEqual(0, result.TotalSegmentsFinalized);
+        Assert.AreEqual(2, result.TotalUnitsUnderThreshhold);
+        Assert.AreEqual(100, result.PercentageUnitsUnderThreshold, 0.001);
+        Assert.IsTrue(scoreThresholds.All(value => value is 0.9), string.Join(", ", scoreThresholds));
         Assert.IsTrue(Segments(result.File).All(segment => segment.State == SegmentState.Translated));
     }
 

@@ -20,6 +20,9 @@ public class ReviewActions(InvocationContext invocationContext, IFileManagementC
     // The action's threshold, average and percentage are on a 0-100 scale; the library scores 0-1.
     private const double ScoreScale = 100;
 
+    // Used when the client gives no threshold; the same 0.8 the OpenAI and Anthropic apps use.
+    private const double DefaultThreshold = 80;
+
     [Action("Quality estimation (experimental)", Description = "Evaluates unit and file level translation quality for translated files.")]
     public async Task<ScoreResponse> Score(
         [ActionParameter] AIModelRequest model,
@@ -28,11 +31,12 @@ public class ReviewActions(InvocationContext invocationContext, IFileManagementC
         [ActionParameter] PromptRequest promptRequest,
         [ActionParameter, Display("Bucket size", Description = "Specify the maximum number of segments to be estimated at once. Default value: 250. Buckets are also sized to fit the model's output limit. (See our documentation for an explanation)")] int? bucketSize = null)
     {
-        if (input.Threshold is < 0 or > ScoreScale)
+        // Inputs are validated before any download or model call.
+        var threshold = input.Threshold ?? DefaultThreshold;
+        if (threshold is < 0 or > ScoreScale)
             throw new PluginMisconfigurationException("Score threshold must be in range 0..100.");
 
         var newState = SegmentStateHelper.ToSegmentState(input.NewState ?? string.Empty) ?? SegmentState.Reviewed;
-        var threshold = input.Threshold / ScoreScale;
 
         var client = CreateLlmClient(model.AIModel, promptRequest);
         var processor = CreateContentProcessor(client, model.AIModel, bucketSize);
@@ -49,10 +53,10 @@ public class ReviewActions(InvocationContext invocationContext, IFileManagementC
             AdditionalInstructions = prompt,
             SegmentStates = SegmentStateSets.Parse(input.EstimateUnitsWhereAllSegmentStates, SegmentStateSets.Review),
 
-            // Without a threshold nothing is promoted or counted as under it, as before.
-            Threshold = threshold ?? 0.8,
-            LowScoreThreshold = threshold ?? 0,
-            StateAboveThreshold = threshold is null ? null : newState
+            // The one client threshold decides both what is promoted and what counts as under it.
+            Threshold = threshold / ScoreScale,
+            LowScoreThreshold = threshold / ScoreScale,
+            StateAboveThreshold = newState
         }));
 
         var content = result.Content;
@@ -63,10 +67,10 @@ public class ReviewActions(InvocationContext invocationContext, IFileManagementC
             File = await UploadAsync(result.File),
             TotalUnits = content.Content.GetUnits().Count(),
             TotalUnitsProcessed = review.ScoredSegments,
-            TotalUnitsUnderThreshhold = threshold is null ? 0 : review.UnderThreshold,
-            TotalSegmentsFinalized = threshold is null ? 0 : review.Finalized,
+            TotalUnitsUnderThreshhold = review.UnderThreshold,
+            TotalSegmentsFinalized = review.Finalized,
             AverageScore = review.AverageScore * ScoreScale,
-            PercentageUnitsUnderThreshold = threshold is null ? 0 : review.PercentageUnderThreshold,
+            PercentageUnitsUnderThreshold = review.PercentageUnderThreshold,
             Usage = ToUsageDto(content.Usage, client),
         };
     }
