@@ -16,4 +16,16 @@ public interface IGenerativeModelClient
         object? schema = null,
         IEnumerable<Part>? files = null,
         CancellationToken cancellationToken = default);
+
+    // The full generation result, finish reason included. A responseJsonSchema is a standard JSON Schema
+    // document (Gemini's responseJsonSchema), while schema is Gemini's OpenAPI subset (responseSchema).
+    Task<GeneratedTextDto> GenerateAsync(
+        PromptRequest input,
+        string modelId,
+        string prompt,
+        string? systemPrompt = null,
+        object? schema = null,
+        object? responseJsonSchema = null,
+        IEnumerable<Part>? files = null,
+        CancellationToken cancellationToken = default);
 }

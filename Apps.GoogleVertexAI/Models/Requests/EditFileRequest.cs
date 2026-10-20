@@ -18,4 +18,7 @@ public class EditFileRequest : IEditFileInput
 
     [Display("Output file handling", Description = "Determine the format of the output file. The default Blackbird behavior is to convert to XLIFF for future steps."), StaticDataSource(typeof(ProcessFileFormatHandler))]
     public string? OutputFileHandling { get; set; }
+
+    [Display("Generate document summary", Description = "By default, a short summary of the document is generated and given to the model as context for files of 20 or more segments. This costs one extra request. Set to false to skip it.")]
+    public bool? GenerateDocumentSummary { get; set; }
 }

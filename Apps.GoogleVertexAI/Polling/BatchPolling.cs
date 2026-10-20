@@ -1,19 +1,13 @@
-﻿using Apps.GoogleVertexAI.Constants;
-using Apps.GoogleVertexAI.Factories;
+﻿using Apps.GoogleVertexAI.Ai;
+using Apps.GoogleVertexAI.Clients;
 using Apps.GoogleVertexAI.Invocables;
 using Apps.GoogleVertexAI.Models.Requests;
 using Apps.GoogleVertexAI.Models.Response;
 using Apps.GoogleVertexAI.Polling.Model;
-using Blackbird.Applications.Sdk.Common.Exceptions;
+using Blackbird.Ai.Llm.Models;
 using Blackbird.Applications.Sdk.Common.Invocation;
 using Blackbird.Applications.Sdk.Common.Polling;
 using Google.Cloud.AIPlatform.V1;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Text.RegularExpressions;
-using System.Threading.Tasks;
 
 namespace Apps.GoogleVertexAI.Polling
 {
@@ -22,7 +16,7 @@ namespace Apps.GoogleVertexAI.Polling
     {
         public BatchPolling(InvocationContext invocationContext) : base(invocationContext) { }
 
-        [PollingEvent("On background job finished", "Triggered when a Vertex AI background job reaches a terminal state (Succeeded/Failed/Cancelled).")]
+        [PollingEvent("On background job finished", "Triggered once when a Vertex AI background job reaches a terminal state (Succeeded/Partially succeeded/Failed/Cancelled/Expired).")]
         public async Task<PollingEventResponse<BatchMemory, BatchStatusResponse>> OnBatchFinished(PollingEventRequest<BatchMemory> request,
             [PollingEventParameter] BatchIdentifier identifier)
         {
@@ -39,18 +33,28 @@ namespace Apps.GoogleVertexAI.Polling
                 };
             }
 
-            if (string.IsNullOrWhiteSpace(identifier.JobName))
-                throw new PluginMisconfigurationException("Job name is required.");
+            var result = string.IsNullOrWhiteSpace(identifier.JobName)
+                ? new BatchStatusResponse { State = JobState.Succeeded.ToString() }
+                : await GetStatusAsync(identifier.JobName);
 
-            var region = TryGetLocationFromJobName(identifier.JobName, out var loc)
-                ? loc
-                : throw new PluginMisconfigurationException(
-                    "Invalid job name: cannot extract location. Expected 'projects/{p}/locations/{loc}/batchPredictionJobs/{id}'.");
+            var finished = VertexBatchLlmClient.StateOf(Enum.Parse<JobState>(result.State)) != BatchJobState.Running;
+            return new()
+            {
+                FlyBird = finished && !request.Memory.Triggered,
+                Result = finished ? result : null,
+                Memory = new BatchMemory
+                {
+                    LastPollingTime = DateTime.UtcNow,
+                    Triggered = request.Memory.Triggered || finished
+                }
+            };
+        }
 
-            var jobClient = ClientFactory.CreateJobService(InvocationContext.AuthenticationCredentialsProviders, region);
-            var job = jobClient.GetBatchPredictionJob(identifier.JobName);
+        private async Task<BatchStatusResponse> GetStatusAsync(string jobName)
+        {
+            var job = await VertexBatchJobs.GetAsync(InvocationContext.AuthenticationCredentialsProviders, jobName);
 
-            var result = new BatchStatusResponse
+            return new BatchStatusResponse
             {
                 State = job.State.ToString(),
                 SuccessfulCount = job.CompletionStats?.SuccessfulCount ?? 0,
@@ -60,47 +64,6 @@ namespace Apps.GoogleVertexAI.Polling
                 ErrorMessage = job.Error?.Message,
                 PartialFailures = job.PartialFailures?.Select(pf => $"{pf.Code}: {pf.Message}")?.ToList()
             };
-
-            var isTerminal =
-                job.State == JobState.Succeeded ||
-                job.State == JobState.Failed ||
-                job.State == JobState.Cancelled;
-
-            var triggeredNow = isTerminal && !request.Memory.Triggered;
-
-            return new()
-            {
-                FlyBird = triggeredNow,
-                Result = isTerminal ? result : null,
-                Memory = new BatchMemory
-                {
-                    LastPollingTime = DateTime.UtcNow,
-                    Triggered = request.Memory.Triggered || isTerminal
-                }
-            };
-        }
-
-        private static bool TryGetLocationFromJobName(string jobName, out string location)
-        {
-            location = string.Empty;
-
-            if (BatchPredictionJobName.TryParse(jobName, out var rn))
-            {
-                location = rn.LocationId;
-                return !string.IsNullOrWhiteSpace(location);
-            }
-
-            var m = Regex.Match(jobName,
-                @"^projects/[^/]+/locations/(?<loc>[^/]+)/batchPredictionJobs/[^/]+$",
-                RegexOptions.IgnoreCase);
-
-            if (m.Success)
-            {
-                location = m.Groups["loc"].Value;
-                return true;
-            }
-
-            return false;
         }
     }
 }
