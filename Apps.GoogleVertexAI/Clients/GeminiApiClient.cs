@@ -1,5 +1,11 @@
+using System.Globalization;
+using System.Net;
+using System.Text.RegularExpressions;
 using Apps.GoogleVertexAI.Clients.Abstractions;
 using Apps.GoogleVertexAI.Models.Dto;
+using Apps.GoogleVertexAI.Utils;
+using Polly;
+using Polly.Retry;
 using Blackbird.Applications.Sdk.Common.Exceptions;
 using Newtonsoft.Json;
 using RestSharp;
@@ -16,6 +22,15 @@ public abstract class GeminiApiClient : RestClient, IGeminiApiClient
         NullValueHandling = NullValueHandling.Ignore,
         ContractResolver = new Newtonsoft.Json.Serialization.CamelCasePropertyNamesContractResolver()
     };
+
+    private static readonly Regex RetryDelayPattern = new("\"retryDelay\"\\s*:\\s*\"([0-9.]+)s\"", RegexOptions.Compiled);
+
+    private static readonly AsyncRetryPolicy<RestResponse> RateLimitPolicy = Policy
+        .HandleResult<RestResponse>(response => response.StatusCode == HttpStatusCode.TooManyRequests)
+        .WaitAndRetryAsync(
+            RateLimitBackoff.RetryCount,
+            (retryAttempt, result, _) => GetRetryDelay(retryAttempt, result.Result),
+            (_, _, _, _) => Task.CompletedTask);
 
     private readonly Blackbird.Applications.Sdk.Common.Invocation.Logger? _logger;
 
@@ -50,10 +65,30 @@ public abstract class GeminiApiClient : RestClient, IGeminiApiClient
     {
         await AuthorizeAsync(request);
 
-        var response = await base.ExecuteAsync(request, cancellationToken);
+        var response = await RateLimitPolicy.ExecuteAsync(
+            token => base.ExecuteAsync(request, token),
+            cancellationToken);
         EnsureSuccess(request, response);
 
         return response;
+    }
+
+    private static TimeSpan GetRetryDelay(int retryAttempt, RestResponse response)
+    {
+        var retryAfter = response.Headers?
+            .FirstOrDefault(header => string.Equals(header.Name, "Retry-After", StringComparison.OrdinalIgnoreCase))?
+            .Value?.ToString();
+
+        if (int.TryParse(retryAfter, out var seconds))
+        {
+            return RateLimitBackoff.GetDelay(retryAttempt, seconds);
+        }
+
+        // Gemini usually sends no header but a RetryInfo detail such as "retryDelay": "23s" in the body.
+        var retryDelay = RetryDelayPattern.Match(response.Content ?? string.Empty);
+        return retryDelay.Success && double.TryParse(retryDelay.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var delay)
+            ? RateLimitBackoff.GetDelay(retryAttempt, (int)Math.Ceiling(delay))
+            : RateLimitBackoff.GetDelay(retryAttempt);
     }
 
     protected abstract Task AuthorizeAsync(RestRequest request);

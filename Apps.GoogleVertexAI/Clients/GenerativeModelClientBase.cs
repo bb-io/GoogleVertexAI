@@ -8,6 +8,9 @@ namespace Apps.GoogleVertexAI.Clients;
 
 public abstract class GenerativeModelClientBase
 {
+    // Gemini's finish reason for an answer cut off at the output limit.
+    public const string MaxTokensFinishReason = "MAX_TOKENS";
+
     protected static IEnumerable<SafetySetting> BuildVertexSafetySettings(PromptRequest promptRequest)
     {
         if (promptRequest is not { SafetyCategories: not null, SafetyCategoryThresholds: not null })

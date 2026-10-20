@@ -19,4 +19,10 @@ public class BatchFileResponse
     
     [Display("Updated segments count")]
     public int UpdatedSegmentsCount { get; set; }
+
+    [Display("Unresolved segments", Description = "Segments the batch returned no usable result for. They were left unchanged; the reasons are in the warnings.")]
+    public int UnresolvedSegmentsCount { get; set; }
+
+    [Display("Batch status")]
+    public string BatchStatus { get; set; } = string.Empty;
 }

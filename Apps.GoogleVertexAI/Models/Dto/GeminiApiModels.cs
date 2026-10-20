@@ -192,7 +192,10 @@ public class GeminiGenerationConfig
 {
     [JsonProperty("responseSchema", NullValueHandling = NullValueHandling.Ignore)]
     public object? ResponseSchema { get; set; }
-    
+
+    [JsonProperty("responseJsonSchema", NullValueHandling = NullValueHandling.Ignore)]
+    public object? ResponseJsonSchema { get; set; }
+
     [JsonProperty("responseMimeType", NullValueHandling = NullValueHandling.Ignore)]
     public string? ResponseMimeType { get; set; }
     

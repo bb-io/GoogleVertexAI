@@ -26,6 +26,20 @@ public sealed class GeminiRestGenerativeModelClient(IGeminiApiClient geminiApiCl
         IEnumerable<Part>? files = null,
         CancellationToken cancellationToken = default)
     {
+        var generated = await GenerateAsync(input, modelId, prompt, systemPrompt, schema, null, files, cancellationToken);
+        return (generated.Text, generated.Usage);
+    }
+
+    public async Task<GeneratedTextDto> GenerateAsync(
+        PromptRequest input,
+        string modelId,
+        string prompt,
+        string? systemPrompt = null,
+        object? schema = null,
+        object? responseJsonSchema = null,
+        IEnumerable<Part>? files = null,
+        CancellationToken cancellationToken = default)
+    {
         if (files is not null)
         {
             throw new PluginApplicationException("This action requires a service account connection when files are attached.");
@@ -53,7 +67,8 @@ public sealed class GeminiRestGenerativeModelClient(IGeminiApiClient geminiApiCl
                 GenerationConfig = new GeminiGenerationConfig
                 {
                     ResponseSchema = schema,
-                    ResponseMimeType = schema is null ? null : "application/json",
+                    ResponseJsonSchema = responseJsonSchema,
+                    ResponseMimeType = schema is null && responseJsonSchema is null ? null : "application/json",
                     Temperature = input.Temperature ?? 0.9f,
                     TopP = input.TopP ?? 1.0f,
                     TopK = input.TopK ?? 3,
@@ -63,7 +78,10 @@ public sealed class GeminiRestGenerativeModelClient(IGeminiApiClient geminiApiCl
             });
 
             var response = await geminiApiClient.ExecuteAsync<GeminiGenerateContentResponse>(request, cancellationToken);
-            return (ExtractText(response), ExtractUsage(response));
+            return new GeneratedTextDto(
+                ExtractText(response),
+                ExtractUsage(response),
+                response.Candidates?.FirstOrDefault()?.FinishReason);
         }
         catch (Exception exception) when (exception is not PluginApplicationException)
         {

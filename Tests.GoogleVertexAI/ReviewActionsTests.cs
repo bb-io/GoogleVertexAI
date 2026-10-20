@@ -80,7 +80,6 @@ public class ReviewActionsTests : TestBase
             TargetLanguage = "fr",
             Threshold = 99.0f,
             NewState = SegmentStateHelper.Serialize(SegmentState.Reviewed),
-            SaveScores = true,
         };
         string? prompt = null;
         var promptRequest = new PromptRequest
