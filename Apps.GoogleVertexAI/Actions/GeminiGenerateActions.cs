@@ -1,3 +1,4 @@
+using Apps.GoogleVertexAI.Helpers;
 using Apps.GoogleVertexAI.Invocables;
 using Apps.GoogleVertexAI.Models.Dto;
 using Apps.GoogleVertexAI.Models.Requests;
@@ -41,7 +42,8 @@ public class GeminiGenerateActions(InvocationContext invocationContext, IFileMan
                 prompt,
                 promptRequest,
                 fileSearchStoreNames,
-                input.MetadataFilter);
+                input.MetadataFilter,
+                YouTubeVideoHelper.ToGeminiPart(input.YouTubeVideoUrl));
 
             return new()
             {
@@ -51,7 +53,11 @@ public class GeminiGenerateActions(InvocationContext invocationContext, IFileMan
             };
         }
 
-        var (response, promptUsage) = await ExecuteGeminiPrompt(promptRequest, input.AIModel, prompt);
+        var (response, promptUsage) = await ExecuteGeminiPrompt(
+            promptRequest,
+            input.AIModel,
+            prompt,
+            files: YouTubeVideoHelper.ToVertexParts(input.YouTubeVideoUrl));
 
         return new()
         {
@@ -69,7 +75,7 @@ public class GeminiGenerateActions(InvocationContext invocationContext, IFileMan
             ? FromBlackbirdPrompt(input.Prompt)
             : input.Prompt;
 
-        var files = new List<Part> { };
+        var files = YouTubeVideoHelper.ToVertexParts(input.YouTubeVideoUrl) ?? [];
 
         foreach (var file in input.Files)
         {
@@ -95,10 +101,12 @@ public class GeminiGenerateActions(InvocationContext invocationContext, IFileMan
         string prompt,
         PromptRequest promptRequest,
         IEnumerable<string> fileSearchStoreNames,
-        string? metadataFilter)
+        string? metadataFilter,
+        GeminiPart? videoPart)
     {
         try
         {
+            var promptPart = new GeminiPart { Text = prompt };
             var request = GeminiApiClient.CreateRequest($"v1beta/models/{modelId}:generateContent", Method.Post);
             request.AddJsonBody(new GeminiGenerateContentRequest
             {
@@ -106,10 +114,7 @@ public class GeminiGenerateActions(InvocationContext invocationContext, IFileMan
                 [
                     new GeminiContent
                     {
-                        Parts =
-                        [
-                            new GeminiPart { Text = prompt }
-                        ]
+                        Parts = videoPart is null ? [promptPart] : [videoPart, promptPart]
                     }
                 ],
                 GenerationConfig = new GeminiGenerationConfig

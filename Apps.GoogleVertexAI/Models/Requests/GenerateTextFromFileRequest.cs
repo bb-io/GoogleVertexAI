@@ -23,4 +23,8 @@ public class GenerateTextFromFileRequest : PromptRequest
     [Display("Is Blackbird prompt", Description = "Parameter indicating whether the input prompt is the output " +
                                                   "of one of the AI Utilities app's actions; defaults to 'False'.")]
     public bool? IsBlackbirdPrompt { get; set; }
+
+    [Display("YouTube video URL", Description = "Optional. Link to a public YouTube video, for example https://www.youtube.com/watch?v=VIDEO_ID. " +
+                                                "The video is passed to Gemini as media input, so the model analyzes both its audio and its visuals.")]
+    public string? YouTubeVideoUrl { get; set; }
 }

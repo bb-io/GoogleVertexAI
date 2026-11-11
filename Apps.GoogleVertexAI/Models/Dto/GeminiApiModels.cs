@@ -177,6 +177,18 @@ public class GeminiPart
 
     [JsonProperty("inlineData", NullValueHandling = NullValueHandling.Ignore)]
     public GeminiInlineData? InlineData { get; set; }
+
+    [JsonProperty("fileData", NullValueHandling = NullValueHandling.Ignore)]
+    public GeminiFileData? FileData { get; set; }
+}
+
+public class GeminiFileData
+{
+    [JsonProperty("fileUri")]
+    public string FileUri { get; set; } = string.Empty;
+
+    [JsonProperty("mimeType", NullValueHandling = NullValueHandling.Ignore)]
+    public string? MimeType { get; set; }
 }
 
 public class GeminiInlineData

@@ -40,10 +40,7 @@ public sealed class GeminiRestGenerativeModelClient(IGeminiApiClient geminiApiCl
         IEnumerable<Part>? files = null,
         CancellationToken cancellationToken = default)
     {
-        if (files is not null)
-        {
-            throw new PluginApplicationException("This action requires a service account connection when files are attached.");
-        }
+        var linkedFileParts = ToLinkedFileParts(files);
 
         try
         {
@@ -60,6 +57,7 @@ public sealed class GeminiRestGenerativeModelClient(IGeminiApiClient geminiApiCl
                     {
                         Parts =
                         [
+                            .. linkedFileParts,
                             new GeminiPart { Text = content }
                         ]
                     }
@@ -87,5 +85,26 @@ public sealed class GeminiRestGenerativeModelClient(IGeminiApiClient geminiApiCl
         {
             throw new PluginApplicationException($"Error: {exception.Message}");
         }
+    }
+
+    private static List<GeminiPart> ToLinkedFileParts(IEnumerable<Part>? files)
+    {
+        if (files is null)
+        {
+            return [];
+        }
+
+        var fileParts = files.ToList();
+        if (fileParts.Count == 0 || fileParts.Any(x => x.FileData is null))
+        {
+            throw new PluginApplicationException("This action requires a service account connection when files are attached.");
+        }
+
+        return fileParts
+            .Select(x => new GeminiPart
+            {
+                FileData = new GeminiFileData { FileUri = x.FileData.FileUri, MimeType = x.FileData.MimeType }
+            })
+            .ToList();
     }
 }

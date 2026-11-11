@@ -23,4 +23,8 @@ public class GenerateTextRequest : PromptRequest
 
     [Display("Metadata filter", Description = "Optional AIP-160 filter expression used to restrict File Search results, for example: author = \"Robert Graves\".")]
     public string? MetadataFilter { get; set; }
+
+    [Display("YouTube video URL", Description = "Optional. Link to a public YouTube video, for example https://www.youtube.com/watch?v=VIDEO_ID. " +
+                                                "The video is passed to Gemini as media input, so the model analyzes both its audio and its visuals.")]
+    public string? YouTubeVideoUrl { get; set; }
 }
