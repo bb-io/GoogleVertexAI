@@ -27,4 +27,6 @@ public class GetTranslationIssuesRequest
     [Display("Include finalized segments", Description = "By default it set to false. If false, the LLM will not process the segments that are locked or set to final.")]
     public bool? PostEditLockedSegments { get; set; }
 
+    [Display("Include translation memory suggestions", Description = "By default it set to false. If true, translation memory matches from the XLIFF alt-trans elements (Phrase MXLIFF memsource-tm) are added to the prompt as reference.")]
+    public bool? IncludeTranslationMemorySuggestions { get; set; }
 }

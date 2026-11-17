@@ -8,11 +8,9 @@ using Blackbird.Applications.Sdk.Common.Actions;
 using Blackbird.Applications.Sdk.Common.Exceptions;
 using Blackbird.Applications.Sdk.Common.Invocation;
 using Blackbird.Applications.SDK.Extensions.FileManagement.Interfaces;
-using Blackbird.Filters.Enums;
 using Blackbird.Filters.Transformations;
 using Newtonsoft.Json;
 using System.Text;
-using System.Text.Json;
 
 namespace Apps.GoogleVertexAI.Actions;
 
@@ -44,26 +42,32 @@ public class ReportingActions(InvocationContext invocationContext, IFileManageme
                 "along with terminology problems not related to the glossary. ";
         }
 
+        var translationUnitsPrompt = TranslationUnitsPromptBuilder.Build(
+            content,
+            input.PostEditLockedSegments ?? false,
+            input.IncludeTranslationMemorySuggestions ?? false);
+
+        if (translationUnitsPrompt.HasTranslationMemorySuggestions)
+        {
+            systemPrompt +=
+                "Some translation units include 'TranslationMemorySuggestions': previously approved translations of similar source text " +
+                "from the translation memory, each with its match quality. Use them as a reference for terminology, phrasing and consistency. " +
+                "A deviation from a suggestion is not an error by itself; report it only when it causes a real Terminology, Accuracy or Style issue, " +
+                "and take the match quality into account. ";
+        }
+
         if (!String.IsNullOrEmpty(additionalPrompt))
         {
             systemPrompt += additionalPrompt;
         }
-        var unitsToProcess = content.GetUnits()
-            .SelectMany(x => x.Segments)
-            .Where(x => x.State > 0 || x.State is null)
-            .Where(x => (input.PostEditLockedSegments.HasValue && input.PostEditLockedSegments.Value) ? x.State != SegmentState.Final : true);
-
-        var tuJson = System.Text.Json.JsonSerializer.Serialize(
-          unitsToProcess.Select(x => new { x.Id, Source = x.GetSource(), Target = x.GetTarget() }),
-          new JsonSerializerOptions { WriteIndented = true });
 
         var userPrompt = $"Here are the translation units from {sourceLanguage} into {targetLanguage}:\n" +
-                         tuJson +
+                         translationUnitsPrompt.Json +
                          $"{(input.TargetAudience != null ? $"\nTarget audience: {input.TargetAudience}" : "")}";
 
         if (glossary.Glossary != null)
         {
-            var glossaryPromptPart = await GlossaryHelper.GetGlossaryPromptPart(fileManagementClient, glossary.Glossary, string.Join(';', unitsToProcess.Select(x => x.Source)));
+            var glossaryPromptPart = await GlossaryHelper.GetGlossaryPromptPart(fileManagementClient, glossary.Glossary, string.Join(';', translationUnitsPrompt.Segments.Select(x => x.Source)));
             if (!string.IsNullOrEmpty(glossaryPromptPart))
             {
                 userPrompt = userPrompt + glossaryPromptPart;
@@ -96,7 +100,7 @@ public class ReportingActions(InvocationContext invocationContext, IFileManageme
 
         try
         {
-            (response, promptUsage) = await ExecuteGeminiPrompt(promptRequest, model, userPrompt.ToString(), systemPrompt);
+            (response, promptUsage) = await ExecuteGeminiPrompt(promptRequest, model, userPrompt, systemPrompt);
         }
         catch (Exception e)
         {

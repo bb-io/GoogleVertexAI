@@ -100,6 +100,8 @@ Before you can connect you need to make sure that:
 - **Create MQM report** Perform an LQA Analysis of a translated XLIFF file. The result will be a text in the MQM framework form.
 - **Create MQM report in background** similar to the previous action, except that this creates a long running process in the background not blocking your parallel actions. Use in conjunction with a checkpoint to download the result of this long running background job.
 
+> Enable **Include translation memory suggestions** in both MQM actions to pass translation memory matches from the file to the model as reference. Phrase MXLIFF `alt-trans` elements with `origin="memsource-tm"` are supported; empty matches and machine translation alternatives are skipped.
+
 ### Review
 
 - **Quality estimation (experimental)** evaluates unit and file level translation quality for translated files.
