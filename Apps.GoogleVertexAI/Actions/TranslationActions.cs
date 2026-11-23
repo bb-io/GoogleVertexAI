@@ -102,7 +102,6 @@ public class TranslationActions(InvocationContext invocationContext, IFileManage
         };
     }
     
-    // Shared by "Translate" and "Translate in background", so the two cannot drift apart.
     private static TranslateStreamOptions TranslateOptions(
         TranslateFileRequest input,
         Stream file,
@@ -117,6 +116,7 @@ public class TranslationActions(InvocationContext invocationContext, IFileManage
         OutputFileHandling = input.OutputFileHandling,
         GlossaryTbx = glossaryFile,
         AdditionalInstructions = prompt,
-        Summary = SummaryOptions.FromToggle(input.GenerateDocumentSummary)
+        Summary = SummaryOptions.FromToggle(input.GenerateDocumentSummary),
+        IncludeSegmentNotes = input.IncludeSegmentNotes ?? false
     };
 }

@@ -82,7 +82,7 @@ Before you can connect you need to make sure that:
 
 ### Translation
 
-- **Translate** translate file content retrieved from a CMS or file storage. The output can be used in compatible Blackbird interoperable actions.
+- **Translate** translate file content retrieved from a CMS or file storage. The output can be used in compatible Blackbird interoperable actions. Turn on **Include segment notes** to send each segment's notes, for example the message context (msgctxt) of PO files, to the model as context (off by default).
 - **Translate in background** similar to the previous action, except that this creates a long running process in the background not blocking your parallel actions. Use in conjunction with a checkpoint to download the result file of this long running background job.
 - **Translate text** given a text and a locale, tries to create a localized version of the text.
 
@@ -104,7 +104,7 @@ Before you can connect you need to make sure that:
 
 ### Review
 
-- **Quality estimation (experimental)** evaluates unit and file level translation quality for translated files.
+- **Quality estimation (experimental)** evaluates unit and file level translation quality for translated files. Turn on **Include segment notes** to send each segment's notes, for example the message context (msgctxt) of PO files, to the model as context (off by default).
 
 ### Background
 

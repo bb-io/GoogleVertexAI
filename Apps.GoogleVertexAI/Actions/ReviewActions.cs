@@ -17,10 +17,8 @@ namespace Apps.GoogleVertexAI.Actions;
 public class ReviewActions(InvocationContext invocationContext, IFileManagementClient fileManagementClient)
     : VertexAiContentInvocable(invocationContext, fileManagementClient)
 {
-    // The action's threshold, average and percentage are on a 0-100 scale; the library scores 0-1.
     private const double ScoreScale = 100;
 
-    // Used when the client gives no threshold; the same 0.8 the OpenAI and Anthropic apps use.
     private const double DefaultThreshold = 80;
 
     [Action("Quality estimation (experimental)", Description = "Evaluates unit and file level translation quality for translated files.")]
@@ -31,7 +29,6 @@ public class ReviewActions(InvocationContext invocationContext, IFileManagementC
         [ActionParameter] PromptRequest promptRequest,
         [ActionParameter, Display("Bucket size", Description = "Specify the maximum number of segments to be estimated at once. Default value: 250. Buckets are also sized to fit the model's output limit. (See our documentation for an explanation)")] int? bucketSize = null)
     {
-        // Inputs are validated before any download or model call.
         var threshold = input.Threshold ?? DefaultThreshold;
         if (threshold is < 0 or > ScoreScale)
             throw new PluginMisconfigurationException("Score threshold must be in range 0..100.");
@@ -52,11 +49,10 @@ public class ReviewActions(InvocationContext invocationContext, IFileManagementC
             TargetLanguage = input.TargetLanguage,
             AdditionalInstructions = prompt,
             SegmentStates = SegmentStateSets.Parse(input.EstimateUnitsWhereAllSegmentStates, SegmentStateSets.Review),
-
-            // The one client threshold decides both what is promoted and what counts as under it.
             Threshold = threshold / ScoreScale,
             LowScoreThreshold = threshold / ScoreScale,
-            StateAboveThreshold = newState
+            StateAboveThreshold = newState,
+            IncludeSegmentNotes = input.IncludeSegmentNotes ?? false
         }));
 
         var content = result.Content;

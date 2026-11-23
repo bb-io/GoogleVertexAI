@@ -25,4 +25,7 @@ public class ScoreRequest
     [Display("Segment states to estimate", Description = "Only segments in the selected states are estimated ('translated' and 'reviewed' states by default).")]
     [StaticDataSource(typeof(XliffV2StateDataSourceHandler))]
     public IEnumerable<string>? EstimateUnitsWhereAllSegmentStates { get; set; }
+
+    [Display("Include segment notes", Description = "Send the notes of each segment, for example the message context (msgctxt) of PO files, to the model as context. Default value: false.")]
+    public bool? IncludeSegmentNotes { get; set; }
 }
