@@ -29,4 +29,7 @@ public class TranslateFileRequest : ITranslateFileInput
 
     [Display("Generate document summary", Description = "By default, a short summary of the document is generated and given to the model as context for files of 20 or more segments. This costs one extra request. Set to false to skip it.")]
     public bool? GenerateDocumentSummary { get; set; }
+
+    [Display("Include segment notes", Description = "Send the notes of each segment, for example the message context (msgctxt) of PO files, to the model as context. Default value: false.")]
+    public bool? IncludeSegmentNotes { get; set; }
 }
